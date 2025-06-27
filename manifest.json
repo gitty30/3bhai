@@ -1,0 +1,76 @@
+{
+  "update_url": "https://clients2.google.com/service/update2/crx",
+  "icons": {
+    "16": "icon16.plasmo.6c567d50.png",
+    "32": "icon32.plasmo.76b92899.png",
+    "48": "icon48.plasmo.aced7582.png",
+    "64": "icon64.plasmo.8bb5e6e0.png",
+    "128": "icon128.plasmo.3c1ed2d2.png"
+  },
+  "manifest_version": 3,
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "version": "1.0.0",
+  "author": "Hatke-Team-2",
+  "name": "Hatke",
+  "description": "Fraud Detection!",
+  "background": { "service_worker": "static/background/index.js" },
+  "options_ui": { "page": "options.html", "open_in_tab": true },
+  "permissions": ["tabs", "storage", "alarms"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["FindCA.js", "content.js"],
+      "run_at": "document_idle",
+      "css": []
+    },
+    {
+      "matches": ["https://twitter.com/*", "https://x.com/*"],
+      "js": ["mainX.js", "content.js", "popup.js"],
+      "run_at": "document_idle",
+      "css": []
+    }
+  ],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyHk9XPRXFmbe2C5VqNkGIDBEb6raqKlC07db4MF+Y5jnWUDyUWj0C6h5uDO1aZOqpEedOfAErtvYw+NnAvpFTAugDlkI9vyzt71SU55rGkqsyRSSk3c4LswUvm02qX16JagAoj15JpPheQitxyreb5dfgjjRzPcn8G6ct9z+TjVYXmFllqP2TFWo6pQmVqnpFs3DU4CBe4hGvGdXDjuuBzA3PlcKywyLWr79bPXn+mFyNRDQsJirjUM+Ng31UipgiD+d7VyA6NfJQPLnKwvKjd6PTUSOvXW1V4a0sAJypygRNx/Rx1sTKZJxYSeMDxYuKEfLv4eCIxfVZTASTiBIowIDAQAB",
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "assets/uxento.png",
+        "assets/icon.png",
+        "assets/UxentoAxiom.css",
+        "assets/injectedAxiom.js",
+        "assets/alert.mp3",
+        "assets/potion.jpg",
+        "assets/pastel.jpg",
+        "assets/digi.jpg",
+        "assets/shocked.png",
+        "assets/yogurt.png",
+        "assets/TAG.png",
+        "assets/pump.png",
+        "assets/dex.png",
+        "assets/pnl.png",
+        "assets/prosperity.png",
+        "assets/minted.png",
+        "assets/ignited.jpg",
+        "assets/axiom.png",
+        "extension-context.txt"
+      ],
+      "matches": [
+        "https://axiom.trade/*",
+        "https://nova.trade/*",
+        "https://twitter.com/*",
+        "https://x.com/*",
+        "https://discord.com/*"
+      ]
+    },
+    { "matches": ["https://axiom.trade/*"], "resources": ["pnl.04c12721.png"] },
+    { "matches": ["https://nova.trade/*"], "resources": ["pnl.04c12721.png"] }
+  ],
+  "host_permissions": [
+    "https://www.uxento.io/*",
+    "https://axiom.trade/*",
+    "https://api-neo.bullx.io/*",
+    "https://api.uxento.io/*"
+  ]
+}

@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>Profile Validator</title>
+ <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+ <style>
+ * {
+ margin: 0;
+ padding: 0;
+ box-sizing: border-box;
+ }
+
+ :root {
+ --cyber-blue: #00d4ff;
+ --cyber-green: #39ff14;
+ --cyber-purple: #7c3aed;
+ --cyber-dark: #0a0a0f;
+ --cyber-darker: #050507;
+ --cyber-gray: #1a1a2e;
+ --red-danger: #ff4444;
+ --orange-warning: #ffaa00;
+
+ /* Dark mode variables */
+ --bg-primary: linear-gradient(135deg, var(--cyber-darker) 0%, var(--cyber-dark) 50%, var(--cyber-gray) 100%);
+ --text-primary: var(--cyber-blue);
+ --text-secondary: #9ca3af;
+ --panel-bg: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(124, 58, 237, 0.1) 50%, rgba(0, 212, 255, 0.1) 100%);
+ --panel-border: rgba(0, 212, 255, 0.3);
+ --panel-shadow: rgba(0, 212, 255, 0.3);
+ --card-bg: rgba(0, 0, 0, 0.4);
+ --card-border: rgba(0, 212, 255, 0.2);
+ --grid-color: rgba(0, 212, 255, 0.1);
+ }
+
+ [data-theme="light"] {
+ --cyber-blue: #0066cc;
+ --cyber-green: #22c55e;
+ --cyber-purple: #8b5cf6;
+ --red-danger: #ef4444;
+ --orange-warning: #f59e0b;
+
+ /* Light mode variables */
+ --bg-primary: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #cbd5e1 100%);
+ --text-primary: #1e293b;
+ --text-secondary: #64748b;
+ --panel-bg: rgba(255, 255, 255, 0.8);
+ --panel-border: rgba(0, 102, 204, 0.2);
+ --panel-shadow: rgba(0, 102, 204, 0.1);
+ --card-bg: rgba(255, 255, 255, 0.6);
+ --card-border: rgba(0, 102, 204, 0.15);
+ --grid-color: rgba(0, 102, 204, 0.05);
+ }
+
+ body {
+ width: 384px;
+            min-width: 384px;
+            height: 600px;
+            min-height: 600px;
+ background: var(--bg-primary);
+ font-family: 'Orbitron', monospace;
+ color: var(--text-primary);
+ overflow: hidden;
+ position: relative;
+ transition: all 0.3s ease;
+ }
+
+ .grid-bg {
+ position: absolute;
+ top: 0;
+ left: 0;
+ right: 0;
+ bottom: 0;
+ background-image:
+ linear-gradient(var(--grid-color) 1px, transparent 1px),
+ linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+ background-size: 20px 20px;
+ opacity: 0.3;
+ animation: pulse-slow 3s ease-in-out infinite;
+ }
+
+ .container {
+ position: relative;
+ z-index: 10;
+            height: 600px;
+ display: flex;
+ flex-direction: column;
+            padding: 12px;
+            gap: 10px;
+ overflow-y: auto;
+ }
+
+ .header {
+ text-align: center;
+ border-bottom: 1px solid var(--panel-border);
+            padding-bottom: 12px;
+ display: flex;
+ justify-content: space-between;
+ align-items: center;
+            flex-shrink: 0;
+ }
+
+ .header-content {
+ flex: 1;
+ }
+
+ .theme-toggle {
+ background: var(--panel-bg);
+ border: 1px solid var(--panel-border);
+ border-radius: 20px;
+ padding: 6px;
+ cursor: pointer;
+ display: flex;
+ align-items: center;
+ gap: 4px;
+ transition: all 0.3s ease;
+ font-size: 12px;
+ color: var(--text-primary);
+ min-width: 60px;
+ justify-content: center;
+ }
+
+ .theme-toggle:hover {
+ box-shadow: 0 0 10px var(--panel-shadow);
+ }
+
+ .header h1 {
+            font-size: 18px;
+ font-weight: 900;
+ color: var(--text-primary);
+ text-shadow: 0 0 10px var(--text-primary);
+ animation: flicker 0.1s ease-in-out infinite alternate;
+ }
+
+ .header p {
+            font-size: 10px;
+ color: var(--text-secondary);
+            margin-top: 2px;
+ }
+
+ .panel {
+ background: var(--panel-bg);
+ backdrop-filter: blur(10px);
+ border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            padding: 12px;
+ box-shadow: 0 0 15px var(--panel-shadow);
+ transition: all 0.3s ease;
+            flex-shrink: 0;
+ }
+
+ .risk-header {
+ display: flex;
+ justify-content: space-between;
+ align-items: center;
+ margin-bottom: 16px;
+ }
+
+ .risk-label {
+ font-size: 14px;
+ font-weight: 600;
+ text-transform: uppercase;
+ letter-spacing: 1px;
+ }
+
+ .risk-level {
+ font-size: 14px;
+ font-weight: 700;
+ animation: pulse 2s ease-in-out infinite;
+ }
+
+ .threat-high {
+ color: var(--red-danger);
+ text-shadow: 0 0 10px var(--red-danger);
+ }
+
+ .threat-medium {
+ color: var(--orange-warning);
+ text-shadow: 0 0 10px var(--orange-warning);
+ }
+
+ .threat-low {
+ color: var(--cyber-green);
+ text-shadow: 0 0 10px var(--cyber-green);
+ }
+
+ .alert-box {
+ padding: 12px;
+ border-radius: 4px;
+ margin-bottom: 16px;
+ position: relative;
+ overflow: hidden;
+ }
+
+ .alert-danger {
+ background: rgba(255, 68, 68, 0.1);
+ border-left: 4px solid var(--red-danger);
+ }
+
+ .alert-success {
+ background: rgba(57, 255, 20, 0.1);
+ border-left: 4px solid var(--cyber-green);
+ }
+
+ .alert-header {
+ display: flex;
+ justify-content: space-between;
+ align-items: center;
+ margin-bottom: 4px;
+ }
+
+ .alert-title {
+ font-size: 14px;
+ font-weight: 500;
+ }
+
+ .alert-value {
+ font-weight: 700;
+ color: var(--red-danger);
+ }
+
+ .alert-desc {
+ font-size: 12px;
+ color: #9ca3af;
+ }
+
+ .pnl-section {
+ position: relative;
+ overflow: hidden;
+ }
+
+ .pnl-section::before {
+ content: '';
+ position: absolute;
+ top: 0;
+ left: -100%;
+ width: 100%;
+ height: 100%;
+ background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.3), transparent);
+ animation: scan 3s linear infinite;
+ }
+
+ .pnl-title {
+ font-size: 14px;
+ font-weight: 500;
+ color: var(--cyber-green);
+ margin-bottom: 4px;
+ }
+
+ .pnl-value {
+ font-size: 18px;
+ font-weight: 700;
+ color: var(--cyber-green);
+ }
+
+ .pnl-negative {
+ color: var(--red-danger);
+ }
+
+ .wallet-address {
+ font-size: 12px;
+ color: #6b7280;
+ font-family: 'Courier New', monospace;
+ margin-top: 4px;
+ }
+
+ .section-title {
+ font-size: 14px;
+ font-weight: 700;
+ text-transform: uppercase;
+ letter-spacing: 1px;
+ margin-bottom: 12px;
+ color: var(--cyber-blue);
+ }
+
+ .stats-grid {
+ display: grid;
+ grid-template-columns: 1fr 1fr;
+ gap: 12px;
+ }
+
+ .stat-card {
+ background: var(--card-bg);
+ border: 1px solid var(--card-border);
+ border-radius: 4px;
+ padding: 12px;
+ transition: all 0.3s ease;
+ }
+
+ .stat-label {
+ font-size: 12px;
+ color: var(--text-primary);
+ text-transform: uppercase;
+ margin-bottom: 4px;
+ opacity: 0.8;
+ }
+
+ .stat-value {
+ font-size: 14px;
+ font-weight: 600;
+ color: var(--text-primary);
+ }
+
+ .stat-unverified {
+ color: var(--orange-warning);
+ }
+
+ .loading {
+ display: none;
+ text-align: center;
+ padding: 16px 0;
+ }
+
+ .loading.active {
+ display: block;
+ }
+
+ .spinner {
+ display: inline-block;
+ width: 32px;
+ height: 32px;
+ border: 2px solid var(--panel-border);
+ border-top: 2px solid var(--text-primary);
+ border-radius: 50%;
+ animation: spin 1s linear infinite;
+ margin-bottom: 8px;
+ }
+
+ .loading-text {
+ font-size: 12px;
+ color: #9ca3af;
+ }
+
+ .scan-button {
+ background: linear-gradient(45deg, var(--cyber-purple), var(--cyber-blue));
+ color: black;
+ font-weight: 700;
+ padding: 12px 24px;
+ border-radius: 8px;
+ text-transform: uppercase;
+ letter-spacing: 1px;
+ font-size: 14px;
+ border: none;
+ cursor: pointer;
+ transition: all 0.3s ease;
+ box-shadow: 0 0 15px var(--panel-shadow);
+ font-family: 'Orbitron', monospace;
+ }
+
+ /* Chat Box Styles */
+ .chat-container {
+ background: var(--panel-bg);
+ border: 1px solid var(--panel-border);
+            border-radius: 6px;
+ backdrop-filter: blur(10px);
+ box-shadow: 0 0 15px var(--panel-shadow);
+ margin-top: auto;
+ display: flex;
+ flex-direction: column;
+            min-height: 160px;
+            max-height: 220px;
+            flex-shrink: 0;
+ }
+
+ .chat-header {
+ display: flex;
+ justify-content: space-between;
+ align-items: center;
+ padding: 8px 12px;
+ background: var(--card-bg);
+ border-bottom: 1px solid var(--panel-border);
+ border-radius: 6px 6px 0 0;
+ font-size: 12px;
+ font-weight: 600;
+ color: var(--text-primary);
+ }
+
+ .chat-title {
+            font-size: 11px;
+ font-weight: 600;
+ color: var(--text-primary);
+ text-transform: uppercase;
+ letter-spacing: 1px;
+ }
+
+ .chat-toggle {
+ background: none;
+ border: none;
+ color: var(--text-primary);
+ cursor: pointer;
+ font-size: 16px;
+ padding: 4px;
+ border-radius: 4px;
+ transition: all 0.2s ease;
+ }
+
+ .chat-toggle:hover {
+ background: var(--panel-border);
+ }
+
+ .chat-controls {
+ display: flex;
+ gap: 6px;
+ align-items: center;
+ }
+
+ .speech-toggle {
+ background: var(--panel-bg);
+ border: 1px solid var(--panel-border);
+ border-radius: 50%;
+ width: 28px;
+ height: 28px;
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ cursor: pointer;
+ transition: all 0.2s ease;
+ color: var(--text-primary);
+ font-size: 12px;
+ }
+
+ .speech-toggle:hover {
+ box-shadow: 0 0 10px var(--panel-shadow);
+ transform: scale(1.1);
+ }
+
+ .speech-toggle.speech-enabled {
+ background: var(--cyber-blue);
+ color: white;
+ border-color: var(--cyber-blue);
+ }
+
+ .speech-toggle.speech-disabled {
+ background: var(--card-bg);
+ color: var(--text-secondary);
+ border-color: var(--panel-border);
+ opacity: 0.7;
+ }
+
+ .chat-messages {
+ flex: 1;
+ overflow-y: auto;
+            padding: 8px;
+ display: flex;
+ flex-direction: column;
+            gap: 6px;
+            min-height: 80px;
+ transition: all 0.3s ease;
+ }
+
+ .chat-messages.collapsed {
+ flex: 0;
+ min-height: 0;
+ padding: 0;
+ overflow: hidden;
+ }
+
+ .message {
+            max-width: 85%;
+            padding: 6px 10px;
+            border-radius: 10px;
+            font-size: 11px;
+            line-height: 1.3;
+ animation: slideIn 0.3s ease;
+ }
+
+ .message.user {
+ align-self: flex-end;
+ background: var(--cyber-blue);
+ color: white;
+ border-bottom-right-radius: 4px;
+ }
+
+ .message.ai {
+ align-self: flex-start;
+ background: var(--card-bg);
+ color: var(--text-primary);
+ border: 1px solid var(--card-border);
+ border-bottom-left-radius: 4px;
+ }
+
+ .message.system {
+ align-self: center;
+ background: var(--cyber-green);
+ color: black;
+            font-size: 10px;
+            padding: 3px 6px;
+ opacity: 0.8;
+ }
+
+ .chat-input-container {
+            padding: 8px;
+ display: flex;
+            gap: 6px;
+ border-top: 1px solid var(--panel-border);
+ background: var(--card-bg);
+            border-radius: 0 0 6px 6px;
+ flex-shrink: 0;
+ transition: all 0.3s ease;
+ }
+
+ .chat-input-container.collapsed {
+ padding: 0;
+ overflow: hidden;
+ max-height: 0;
+ border-top: none;
+ }
+
+ .chat-input {
+ flex: 1;
+ background: var(--panel-bg);
+ border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 6px 12px;
+ color: var(--text-primary);
+            font-size: 11px;
+ font-family: 'Orbitron', monospace;
+ outline: none;
+ transition: all 0.2s ease;
+ }
+
+ .chat-input:focus {
+ border-color: var(--cyber-blue);
+ box-shadow: 0 0 10px var(--panel-shadow);
+ }
+
+ .chat-input::placeholder {
+ color: var(--text-secondary);
+ opacity: 0.6;
+ }
+
+ .chat-send {
+ background: var(--cyber-blue);
+ border: none;
+ border-radius: 50%;
+            width: 32px;
+            height: 32px;
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ cursor: pointer;
+ transition: all 0.2s ease;
+ color: white;
+            font-size: 12px;
+ }
+
+ .chat-send:hover {
+ transform: scale(1.1);
+ box-shadow: 0 0 15px var(--panel-shadow);
+ }
+
+ .chat-send:disabled {
+ opacity: 0.5;
+ cursor: not-allowed;
+ transform: none;
+ }
+
+ .scan-button:hover {
+ transform: translateY(-2px) scale(1.05);
+ box-shadow: 0 5px 25px rgba(0, 212, 255, 0.5);
+ }
+
+ .scan-button:active {
+ transform: scale(0.95);
+ }
+
+ .scan-button:disabled {
+ opacity: 0.5;
+ cursor: not-allowed;
+ transform: none;
+ }
+
+ /* Animations */
+ @keyframes pulse-slow {
+ 0%, 100% { opacity: 0.3; }
+ 50% { opacity: 0.6; }
+ }
+
+ @keyframes pulse {
+ 0%, 100% { opacity: 1; }
+ 50% { opacity: 0.7; }
+ }
+
+ @keyframes spin {
+ 0% { transform: rotate(0deg); }
+ 100% { transform: rotate(360deg); }
+ }
+
+ @keyframes scan {
+ 0% { transform: translateX(-100%); }
+ 100% { transform: translateX(100%); }
+ }
+
+ @keyframes flicker {
+ 0% { opacity: 1; }
+ 100% { opacity: 0.8; }
+ }
+
+ @keyframes slideIn {
+ from {
+ opacity: 0;
+ transform: translateY(10px);
+ }
+ to {
+ opacity: 1;
+ transform: translateY(0);
+ }
+ }
+
+ /* Custom scrollbar */
+ .chat-messages::-webkit-scrollbar {
+ width: 4px;
+ }
+
+ .chat-messages::-webkit-scrollbar-track {
+ background: var(--card-bg);
+ }
+
+ .chat-messages::-webkit-scrollbar-thumb {
+ background: var(--panel-border);
+ border-radius: 2px;
+ }
+
+ .chat-messages::-webkit-scrollbar-thumb:hover {
+ background: var(--cyber-blue);
+ }
+
+ /* Typing indicator */
+ .message.typing {
+ opacity: 0.7;
+ animation: typing-pulse 1.5s ease-in-out infinite;
+ }
+
+ @keyframes typing-pulse {
+ 0%, 100% { opacity: 0.7; }
+ 50% { opacity: 1; }
+ }
+ </style>
+</head>
+<body>
+ <div class="grid-bg"></div>
+
+ <div class="container">
+ <!-- Header -->
+ <div class="header">
+ <div class="header-content">
+ <h1>NEURAL SCAN</h1>
+ <p>Advanced Threat Detection v3.0</p>
+ </div>
+            <div class="theme-toggle" id="themeToggle">
+ <span id="themeIcon">🌙</span>
+ </div>
+ </div>
+
+ <!-- Risk Assessment Panel -->
+ <div class="panel">
+ <div class="risk-header">
+ <span class="risk-label">Threat Level</span>
+ <span id="riskLevel" class="risk-level threat-high">CRITICAL</span>
+ </div>
+
+ <!-- Username Changes Alert -->
+ <div class="alert-box alert-danger">
+ <div class="alert-header">
+ <span class="alert-title">Identity Switches</span>
+ <span id="usernameChanges" class="alert-value">7/4</span>
+ </div>
+ <p class="alert-desc">Multiple aliases detected - High scam probability</p>
+ </div>
+
+ <!-- PnL Section -->
+ <div id="pnlSection" class="alert-box alert-success pnl-section">
+ <div class="pnl-title">Portfolio Status</div>
+ <div id="pnlValue" class="pnl-value">+$2,847.32</div>
+ <div class="wallet-address" id="walletAddress">
+ 0x742d35Cc6634C0532925a3b8D4068...
+ </div>
+ </div>
+ </div>
+
+ <!-- Profile Analysis -->
+ <div class="panel">
+ <h3 class="section-title">Profile Matrix</h3>
+
+ <div class="stats-grid">
+ <div class="stat-card">
+ <div class="stat-label">Account Age</div>
+ <div id="accountAge" class="stat-value">3 months</div>
+ </div>
+
+ <div class="stat-card">
+                    <div class="stat-label">Username</div>
+                    <div id="username" class="stat-value"></div>
+ </div>
+
+ <div class="stat-card">
+ <div class="stat-label">Network</div>
+ <div id="followers" class="stat-value">12.4K</div>
+ </div>
+
+ <div class="stat-card">
+ <div class="stat-label">Status</div>
+                    <div id="verification" class="stat-value stat-unverified">
+                        <span id="verifiedIcon" style="display:none; vertical-align:middle; margin-left:6px;">
+                            <svg data-testid="icon-verified" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" fill="#22c55e"/><path d="M8 12l2 2l4-4" stroke="#fff" stroke-width="2" fill="none"/></svg>
+                        </span>
+                    </div>
+ </div>
+ </div>
+ </div>
+
+ <!-- Loading Animation -->
+ <div id="loading" class="loading">
+ <div class="spinner"></div>
+ <p class="loading-text">Scanning neural pathways...</p>
+ </div>
+
+ <!-- Deep Scan Button -->
+ <button class="scan-button" onclick="scanProfile()">
+ Initialize Deep Scan
+ </button>
+
+ <!-- Chat Container -->
+ <div class="chat-container">
+ <div class="chat-header">
+ <span class="chat-title">Neural Assistant</span>
+                <div class="chat-controls">
+                    <button class="speech-toggle" id="speechToggle" title="Disable Speech">🔊</button>
+                    <button class="chat-toggle" id="chatToggle">▲</button>
+                </div>
+ </div>
+
+ <div class="chat-messages" id="chatMessages">
+ <div class="message system">Neural Assistant v3.0 initialized</div>
+ <div class="message ai">Hello! I'm your AI security analyst. How can I help you with this profile analysis?</div>
+ </div>
+
+ <div class="chat-input-container" id="chatInputContainer">
+ <input
+ type="text"
+ class="chat-input"
+ placeholder="Ask about security analysis..."
+ id="chatInput"
+ >
+                <button class="chat-send" id="chatSend">▶</button>
+ </div>
+ </div>
+ </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
