@@ -88,7 +88,72 @@ var e, t;
           );
           let o = "f-analyzerReports",
             n = "f-analyzerReportsLastFetch",
-            s = "fetchReportsHourly";
+            s = "fetchReportsHourly",
+            keepAliveAlarm = "keepAliveAlarm",
+            healthCheckAlarm = "healthCheckAlarm";
+          
+          // Keep alive alarm to prevent background script from becoming inactive
+          function createKeepAliveAlarm() {
+            chrome.alarms.create(keepAliveAlarm, {
+              delayInMinutes: 1/12, // Run every 5 seconds (1/12 of a minute)
+              periodInMinutes: 1/12
+            });
+          }
+          
+          // Health check alarm to monitor extension health
+          function createHealthCheckAlarm() {
+            chrome.alarms.create(healthCheckAlarm, {
+              delayInMinutes: 5, // Run every 5 minutes
+              periodInMinutes: 5
+            });
+          }
+          
+          // Initialize all alarms
+          function initializeAlarms() {
+            try {
+              createKeepAliveAlarm();
+              createHealthCheckAlarm();
+            } catch (error) {
+              // Silent error handling
+            }
+          }
+          
+          // Keep alive function to maintain background script activity
+          function keepAlive() {
+            try {
+              // Update last activity timestamp silently
+              chrome.storage.local.set({ 
+                lastBackgroundActivity: Date.now() 
+              }).catch(() => {
+                // Silent error handling
+              });
+            } catch (error) {
+              // Silent error handling
+            }
+          }
+          
+          // Health check function
+          function healthCheck() {
+            try {
+              // Check if we can access storage
+              chrome.storage.local.get(['lastBackgroundActivity'], (result) => {
+                if (chrome.runtime.lastError) {
+                  // Silent error handling
+                }
+              });
+              
+              // Verify alarms are still active
+              chrome.alarms.getAll((alarms) => {
+                if (chrome.runtime.lastError) {
+                  // Recreate alarms if needed
+                  initializeAlarms();
+                }
+              });
+            } catch (error) {
+              // Silent error handling
+            }
+          }
+          
           function a() {
             chrome.alarms.create(s, {
               when:
@@ -126,9 +191,18 @@ var e, t;
               t = e[n],
               r = !t || Date.now() - t > 36e5;
             !e[o] || r ? await i() : a();
+            
+            // Initialize all alarms to keep background script active
+            initializeAlarms();
           })().catch(console.error),
             chrome.alarms.onAlarm.addListener((e) => {
-              e.name === s && i().catch(console.error);
+              if (e.name === s) {
+                i().catch(console.error);
+              } else if (e.name === keepAliveAlarm) {
+                keepAlive();
+              } else if (e.name === healthCheckAlarm) {
+                healthCheck();
+              }
             }),
             chrome.runtime.onMessage.addListener((e, t, r) => {
               if (e?.action === "ensureReports")

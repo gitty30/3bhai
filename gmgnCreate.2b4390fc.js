@@ -286,7 +286,7 @@ var e, t;
               e !== t &&
                 ((t = e),
                 console.debug(
-                  "[Uxento] GMGN route change \u2013 reinserting buttons\u2026"
+                  "[NEURAL_SCAN] GMGN route change \u2013 reinserting buttons\u2026"
                 ),
                 d().catch(console.error));
             }).observe(e, { childList: !0, subtree: !0 });

@@ -111,22 +111,20 @@ var e, t;
             };
           async function i(e) {
             try {
-              let t = await chrome.runtime.sendMessage({
+              let t = await safeSendMessage({
                 action: "fetchTwitterData",
                 username: e,
               });
               if (t?.success && t.data)
-                console.info(`[Uxento] Twitter data for @${e}:`, t.data),
+                console.info(`[NEURAL_SCAN] Twitter data for @${e}:`, t.data),
                   (d[e] = t.data),
-                  await chrome.storage.local.set({
-                    [`ux_twitter_${e}`]: t.data,
-                  }),
+                  await safeStorageSet(`ux_twitter_${e}`, t.data),
                   m(e, t.data);
               else throw Error(t?.error || "Failed in background");
             } catch (t) {
               if (t?.message?.includes("context invalidated")) return;
               console.error(
-                `[Uxento] Failed to fetch Twitter data for @${e}:`,
+                `[NEURAL_SCAN] Failed to fetch Twitter data for @${e}:`,
                 t
               );
             }
@@ -164,7 +162,7 @@ var e, t;
                 window.addEventListener("popstate", p);
             })(),
             setInterval(p, 5e3);
-          let f = "uxento-prev-handles";
+          let f = "NEURAL_SCAN-prev-handles";
           function m(e, t) {
             let n = t.length ? t : [],
               r = () =>
@@ -234,18 +232,18 @@ var e, t;
               (window._uxHeaderObs = l);
           }
           function y() {
-            if (document.getElementById("uxento-profile-btn")) return;
+            if (document.getElementById("neural-scan-profile-btn")) return;
             let e = document.querySelector('button[data-testid="userActions"]');
             if (!e) {
               setTimeout(y, 500);
               return;
             }
             let t = e.parentElement;
-            if (!t || t.querySelector("#uxento-profile-btn")) return;
+            if (!t || t.querySelector("#neural-scan-profile-btn")) return;
             let n = document.createElement("button");
-            (n.id = "uxento-profile-btn"),
+            (n.id = "neural-scan-profile-btn"),
               (n.type = "button"),
-              n.setAttribute("aria-label", "Uxento"),
+              n.setAttribute("aria-label", "NEURAL_SCAN"),
               (n.className = e.className),
               (n.style.borderColor = e.style.borderColor),
               (n.style.backgroundColor = e.style.backgroundColor);
@@ -265,10 +263,10 @@ var e, t;
                 if ((e.preventDefault(), e.stopPropagation(), !s || c)) return;
                 c = !0;
                 let { overlay: t, modal: n } = (function () {
-                  if ((u(), document.getElementById("uxento-modal-overlay")))
+                  if ((u(), document.getElementById("neural-scan-modal-overlay")))
                     return;
                   let e = document.createElement("div");
-                  (e.id = "uxento-modal-overlay"),
+                  (e.id = "neural-scan-modal-overlay"),
                     Object.assign(e.style, {
                       position: "fixed",
                       inset: "0",
@@ -330,12 +328,12 @@ var e, t;
                   );
                 })();
                 try {
-                  let e = await chrome.runtime.sendMessage({
+                  let e = await safeSendMessage({
                     action: "fetchX2Data",
                     username: s,
                   });
                   e?.success
-                    ? (console.info("[Uxento] X2 data for @" + s, e.data),
+                    ? (console.info("[NEURAL_SCAN] X2 data for @" + s, e.data),
                       (function (e, t) {
                         if (
                           (e.querySelector(".ux-spinner")?.remove(),
@@ -410,7 +408,7 @@ var e, t;
                     : (n.textContent = `Error: ${e?.error || "Failed"}`);
                 } catch (e) {
                   if (e?.message?.includes("context invalidated")) return;
-                  console.error("[Uxento] X2 fetch error:", e),
+                  console.error("[NEURAL_SCAN] X2 fetch error:", e),
                     (n.textContent = "Error fetching data");
                 } finally {
                   c = !1;
@@ -457,3 +455,61 @@ var e, t;
     "parcelRequire7905"
   ),
   (globalThis.define = t);
+
+// Utility function to check if extension context is still valid
+function isExtensionContextValid() {
+    try {
+        return typeof chrome !== 'undefined' && 
+               chrome.runtime && 
+               chrome.runtime.id && 
+               !chrome.runtime.lastError;
+    } catch (e) {
+        return false;
+    }
+}
+
+// Safe wrapper for chrome.runtime.sendMessage
+function safeSendMessage(message) {
+    if (!isExtensionContextValid()) {
+        console.warn('[MAINX] Extension context invalid, skipping message send');
+        return Promise.resolve(null);
+    }
+    
+    return new Promise((resolve, reject) => {
+        try {
+            chrome.runtime.sendMessage(message, (response) => {
+                if (chrome.runtime.lastError) {
+                    console.warn('[MAINX] Runtime error:', chrome.runtime.lastError.message);
+                    resolve(null);
+                } else {
+                    resolve(response);
+                }
+            });
+        } catch (e) {
+            console.warn('[MAINX] Failed to send message:', e.message);
+            resolve(null);
+        }
+    });
+}
+
+// Safe wrapper for chrome.storage.local.set
+function safeStorageSet(key, value) {
+    if (!isExtensionContextValid()) {
+        console.warn('[MAINX] Extension context invalid, skipping storage set');
+        return Promise.resolve();
+    }
+    
+    return new Promise((resolve, reject) => {
+        try {
+            chrome.storage.local.set({ [key]: value }, () => {
+                if (chrome.runtime.lastError) {
+                    console.warn('[MAINX] Storage error:', chrome.runtime.lastError.message);
+                }
+                resolve();
+            });
+        } catch (e) {
+            console.warn('[MAINX] Failed to set storage:', e.message);
+            resolve();
+        }
+    });
+}

@@ -46,6 +46,7 @@ window.addEventListener('DOMContentLoaded', function() {
   // Initialize with mock data
   loadTheme(); // Load theme first
   loadSpeechSettings(); // Load speech settings
+  preloadBestVoice(); // Preload the best available voice for faster speech
 
   document.getElementById('usernameChanges').textContent = profileData.usernameChanges + '/4';
   document.getElementById('accountAge').textContent = profileData.accountAge;
@@ -76,11 +77,72 @@ window.addEventListener('DOMContentLoaded', function() {
 let speechEnabled = true;
 let speechSynthesis = window.speechSynthesis;
 let currentUtterance = null;
+let cachedVoice = null; // Cache the best available voice
 
 // Check if speech synthesis is supported
 const isSpeechSupported = () => {
   return 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
 };
+
+// Preload and cache the best available voice
+function preloadBestVoice() {
+  if (!isSpeechSupported()) return;
+  
+  const loadVoice = () => {
+    const voices = speechSynthesis.getVoices();
+    if (voices.length === 0) return;
+    
+    // Enhanced voice selection with better preferences
+    let preferredVoice = null;
+    
+    // Priority 1: Google voices (usually better quality)
+    preferredVoice = voices.find(voice => 
+      voice.lang.includes('en') && 
+      (voice.name.includes('Google') || voice.name.includes('Chrome'))
+    );
+    
+    // Priority 2: Natural-sounding voices
+    if (!preferredVoice) {
+      preferredVoice = voices.find(voice => 
+        voice.lang.includes('en') && 
+        (voice.name.includes('Natural') || voice.name.includes('Premium') || voice.name.includes('Enhanced'))
+      );
+    }
+    
+    // Priority 3: Female voices (often sound more natural for AI assistants)
+    if (!preferredVoice) {
+      preferredVoice = voices.find(voice => 
+        voice.lang.includes('en') && 
+        (voice.name.includes('Female') || voice.name.includes('Samantha') || voice.name.includes('Victoria'))
+      );
+    }
+    
+    // Priority 4: Any English voice
+    if (!preferredVoice) {
+      preferredVoice = voices.find(voice => 
+        voice.lang.includes('en')
+      );
+    }
+    
+    // Priority 5: Fallback to first available voice
+    if (!preferredVoice && voices.length > 0) {
+      preferredVoice = voices[0];
+    }
+    
+    if (preferredVoice) {
+      cachedVoice = preferredVoice;
+      console.log('Cached voice:', preferredVoice.name);
+    }
+  };
+  
+  // Try to load immediately if voices are available
+  loadVoice();
+  
+  // If voices aren't loaded yet, wait for them
+  if (speechSynthesis.getVoices().length === 0) {
+    speechSynthesis.onvoiceschanged = loadVoice;
+  }
+}
 
 // Toggle speech on/off
 function toggleSpeech() {
@@ -173,27 +235,87 @@ function speakText(text) {
   // Create new utterance
   currentUtterance = new SpeechSynthesisUtterance(text);
   
-  // Configure speech settings
-  currentUtterance.rate = 0.9; // Slightly slower for better comprehension
-  currentUtterance.pitch = 1.0;
-  currentUtterance.volume = 0.8;
+  // Configure speech settings for faster, more natural speech
+  currentUtterance.rate = 1.2; // Faster than before (was 0.9)
+  currentUtterance.pitch = 1.1; // Slightly higher pitch for more natural sound
+  currentUtterance.volume = 0.9; // Slightly louder
   
-  // Function to set voice and speak
+  // Use cached voice if available for faster performance
+  if (cachedVoice) {
+    currentUtterance.voice = cachedVoice;
+    console.log('Using cached voice:', cachedVoice.name);
+    
+    // Add event listeners
+    currentUtterance.onstart = () => {
+      console.log('Speech started with cached voice:', cachedVoice.name);
+    };
+    
+    currentUtterance.onend = () => {
+      console.log('Speech ended');
+      currentUtterance = null;
+    };
+    
+    currentUtterance.onerror = (event) => {
+      console.error('Speech error:', event.error);
+      currentUtterance = null;
+    };
+    
+    // Speak immediately with cached voice
+    speechSynthesis.speak(currentUtterance);
+    return;
+  }
+  
+  // Fallback to dynamic voice selection if no cached voice
   const speakWithVoice = () => {
     const voices = speechSynthesis.getVoices();
-    const preferredVoice = voices.find(voice => 
-      voice.lang.includes('en') && voice.name.includes('Google')
-    ) || voices.find(voice => 
-      voice.lang.includes('en')
-    ) || voices[0];
+    
+    // Enhanced voice selection with better preferences
+    let preferredVoice = null;
+    
+    // Priority 1: Google voices (usually better quality)
+    preferredVoice = voices.find(voice => 
+      voice.lang.includes('en') && 
+      (voice.name.includes('Google') || voice.name.includes('Chrome'))
+    );
+    
+    // Priority 2: Natural-sounding voices
+    if (!preferredVoice) {
+      preferredVoice = voices.find(voice => 
+        voice.lang.includes('en') && 
+        (voice.name.includes('Natural') || voice.name.includes('Premium') || voice.name.includes('Enhanced'))
+      );
+    }
+    
+    // Priority 3: Female voices (often sound more natural for AI assistants)
+    if (!preferredVoice) {
+      preferredVoice = voices.find(voice => 
+        voice.lang.includes('en') && 
+        (voice.name.includes('Female') || voice.name.includes('Samantha') || voice.name.includes('Victoria'))
+      );
+    }
+    
+    // Priority 4: Any English voice
+    if (!preferredVoice) {
+      preferredVoice = voices.find(voice => 
+        voice.lang.includes('en')
+      );
+    }
+    
+    // Priority 5: Fallback to first available voice
+    if (!preferredVoice && voices.length > 0) {
+      preferredVoice = voices[0];
+    }
     
     if (preferredVoice) {
       currentUtterance.voice = preferredVoice;
+      // Cache this voice for future use
+      cachedVoice = preferredVoice;
+      console.log('Using voice:', preferredVoice.name);
     }
     
     // Add event listeners
     currentUtterance.onstart = () => {
-      console.log('Speech started');
+      console.log('Speech started with voice:', currentUtterance.voice?.name);
     };
     
     currentUtterance.onend = () => {
@@ -520,71 +642,240 @@ function updateProfileUI(data, fallback) {
   }
 }
 
-function scanProfile() {
-  const loadingElement = document.getElementById('loading');
-  loadingElement.classList.add('active');
-  setTimeout(() => {
-    chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
-      if (tabs.length > 0) {
-        const tabId = tabs[0].id;
-        chrome.tabs.sendMessage(tabId, { action: 'get_profile_data' }, function(data) {
-          updateProfileUI(data || {}, profileData);
-          loadingElement.classList.remove('active');
-          addMessage("Deep scan completed. Profile data has been updated with latest intelligence.", 'system');
-        });
-      } else {
-        updateProfileUI({}, profileData);
-        loadingElement.classList.remove('active');
-        addMessage("Deep scan completed. Profile data has been updated with latest intelligence.", 'system');
-      }
-    });
-  }, 2500);
+// Utility function to check if extension context is still valid
+function isExtensionContextValid() {
+    try {
+        return typeof chrome !== 'undefined' && 
+               chrome.runtime && 
+               chrome.runtime.id && 
+               !chrome.runtime.lastError;
+    } catch (e) {
+        return false;
+    }
 }
 
-// Dynamic scanning line effect
-setInterval(() => {
-  const scanElements = document.querySelectorAll('.pnl-section');
-  scanElements.forEach(el => {
-    if (Math.random() < 0.2) {
-      el.style.background = 'linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.1), transparent)';
-      setTimeout(() => {
-        el.style.background = '';
-      }, 1000);
+// Safe wrapper for chrome.runtime.sendMessage
+function safeSendMessage(message) {
+    if (!isExtensionContextValid()) {
+        console.warn('[POPUP] Extension context invalid, skipping message send');
+        return Promise.resolve(null);
     }
-  });
-}, 3000);
+    
+    return new Promise((resolve, reject) => {
+        try {
+            chrome.runtime.sendMessage(message, (response) => {
+                if (chrome.runtime.lastError) {
+                  //  console.warn('[POPUP] Runtime error:', chrome.runtime.lastError.message);
+                    resolve(null);
+                } else {
+                    resolve(response);
+                }
+            });
+        } catch (e) {
+            console.warn('[POPUP] Failed to send message:', e.message);
+            resolve(null);
+        }
+    });
+}
+
+// Safe wrapper for chrome.tabs.sendMessage
+function safeTabsSendMessage(tabId, message) {
+    if (!isExtensionContextValid()) {
+        console.warn('[POPUP] Extension context invalid, skipping tabs message send');
+        return Promise.resolve(null);
+    }
+    
+    return new Promise((resolve, reject) => {
+        try {
+            chrome.tabs.sendMessage(tabId, message, (response) => {
+                if (chrome.runtime.lastError) {
+                    console.warn('[POPUP] Tabs runtime error:', chrome.runtime.lastError.message);
+                    resolve(null);
+                } else {
+                    resolve(response);
+                }
+            });
+        } catch (e) {
+            console.warn('[POPUP] Failed to send tabs message:', e.message);
+            resolve(null);
+        }
+    });
+}
+
+// Safe wrapper for chrome.tabs.query
+function safeTabsQuery(queryInfo) {
+    if (!isExtensionContextValid()) {
+        console.warn('[POPUP] Extension context invalid, skipping tabs query');
+        return Promise.resolve([]);
+    }
+    
+    return new Promise((resolve, reject) => {
+        try {
+            chrome.tabs.query(queryInfo, (tabs) => {
+                if (chrome.runtime.lastError) {
+                    console.warn('[POPUP] Tabs query error:', chrome.runtime.lastError.message);
+                    resolve([]);
+                } else {
+                    resolve(tabs);
+                }
+            });
+        } catch (e) {
+            console.warn('[POPUP] Failed to query tabs:', e.message);
+            resolve([]);
+        }
+    });
+}
+
+function scanProfile() {
+    const loadingElement = document.getElementById('loading');
+    loadingElement.classList.add('active');
+    
+    setTimeout(async () => {
+        try {
+            const tabs = await safeTabsQuery({ active: true, currentWindow: true });
+            
+            if (tabs.length > 0) {
+                const tabId = tabs[0].id;
+                const data = await safeTabsSendMessage(tabId, { action: 'get_profile_data' });
+                updateProfileUI(data || {}, profileData);
+            } else {
+                updateProfileUI({}, profileData);
+            }
+            
+            loadingElement.classList.remove('active');
+            addMessage("Deep scan completed. Profile data has been updated with latest intelligence.", 'system');
+        } catch (e) {
+            console.warn('[POPUP] Error in scanProfile:', e.message);
+            updateProfileUI({}, profileData);
+            loadingElement.classList.remove('active');
+            addMessage("Deep scan completed. Profile data has been updated with latest intelligence.", 'system');
+        }
+    }, 2500);
+}
 
 function scrapeUserNameFromPage() {
-    const url = window.location.href;
-    const match = url.match(/x\.com\/([A-Za-z0-9_]+)/);
-    if (match) return match[1];
-    return "";
+    try {
+        const url = window.location.href;
+        const match = url.match(/x\.com\/([A-Za-z0-9_]+)/);
+        if (match) return match[1];
+        return "";
+    } catch (e) {
+        console.warn('[POPUP] Error scraping username:', e.message);
+        return "";
+    }
 }
 
 function checkVerifiedBadge() {
-    return !!document.querySelector('[data-testid="icon-verified"]');
+    try {
+        return !!document.querySelector('[data-testid="icon-verified"]');
+    } catch (e) {
+        console.warn('[POPUP] Error checking verified badge:', e.message);
+        return false;
+    }
 }
 
 function sendScrapedData() {
-    const username = scrapeUserNameFromPage();
-    const verified = checkVerifiedBadge();
-    chrome.runtime.sendMessage({
-        action: "scrapedData",
-        data: { username, verified }
-    });
+    try {
+        const username = scrapeUserNameFromPage();
+        const verified = checkVerifiedBadge();
+        
+        safeSendMessage({
+            action: "scrapedData",
+            data: { username, verified }
+        }).catch(e => {
+            console.warn('[POPUP] Failed to send scraped data:', e.message);
+        });
+    } catch (e) {
+        console.warn('[POPUP] Error in sendScrapedData:', e.message);
+    }
 }
 
-sendScrapedData();
+// Global observer reference for cleanup
+let urlObserver = null;
 
-const urlObserver = new MutationObserver(sendScrapedData);
-urlObserver.observe(document.body, { childList: true, subtree: true });
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.action === "scrapedData") {
-        const tabId = sender.tab.id;
-        chrome.storage.local.set({ ["profile_" + tabId]: message.data });
+// Initialize scraping with proper error handling
+function initializeScraping() {
+    try {
+        sendScrapedData();
+        
+        // Start observer with context validation
+        if (urlObserver) {
+            urlObserver.disconnect();
+        }
+        
+        urlObserver = new MutationObserver((mutations) => {
+            // Only process if extension context is still valid
+            if (isExtensionContextValid()) {
+                sendScrapedData();
+            } else {
+                console.warn('[POPUP] Extension context invalid, disconnecting observer');
+                if (urlObserver) {
+                    urlObserver.disconnect();
+                    urlObserver = null;
+                }
+            }
+        });
+        
+        urlObserver.observe(document.body, { childList: true, subtree: true });
+    } catch (e) {
+        console.warn('[POPUP] Error initializing scraping:', e.message);
     }
-    if (message.action === "getTabId") {
-        sendResponse({ tabId: sender.tab.id });
+}
+
+// Initialize scraping
+initializeScraping();
+
+// Safe message listener
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    try {
+        if (message.action === "scrapedData") {
+            const tabId = sender.tab?.id;
+            if (tabId && isExtensionContextValid()) {
+                chrome.storage.local.set({ ["profile_" + tabId]: message.data }, () => {
+                    if (chrome.runtime.lastError) {
+                        console.warn('[POPUP] Storage error:', chrome.runtime.lastError.message);
+                    }
+                });
+            }
+        }
+        if (message.action === "getTabId") {
+            sendResponse({ tabId: sender.tab?.id || null });
+        }
+    } catch (e) {
+        console.warn('[POPUP] Error handling message:', e.message);
+        sendResponse({});
     }
 });
+
+// Cleanup on popup unload
+window.addEventListener('unload', () => {
+    if (urlObserver) {
+        urlObserver.disconnect();
+        urlObserver = null;
+    }
+});
+
+// Cleanup on beforeunload
+window.addEventListener('beforeunload', () => {
+    if (urlObserver) {
+        urlObserver.disconnect();
+        urlObserver = null;
+    }
+});
+
+// Dynamic scanning line effect
+setInterval(() => {
+    try {
+        const scanElements = document.querySelectorAll('.pnl-section');
+        scanElements.forEach(el => {
+            if (Math.random() < 0.2) {
+                el.style.background = 'linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.1), transparent)';
+                setTimeout(() => {
+                    el.style.background = '';
+                }, 1000);
+            }
+        });
+    } catch (e) {
+        console.warn('[POPUP] Error in dynamic scanning effect:', e.message);
+    }
+}, 3000);
