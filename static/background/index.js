@@ -589,6 +589,36 @@ var e, t;
                 );
               }
             });
+
+            // Close Sidebar Handler
+            chrome.runtime.onMessage.addListener((e, t, r) => {
+              if ("closeSidebar" === e.action) {
+                return (
+                  (async () => {
+                    try {
+                      const [tab] = await chrome.tabs.query({
+                        active: true,
+                        currentWindow: true,
+                      });
+                      
+                      if (tab) {
+                        await chrome.sidePanel.setOptions({
+                          tabId: tab.id,
+                          enabled: false,
+                        });
+                        r({ success: true });
+                      } else {
+                        r({ success: false, error: 'No active tab found' });
+                      }
+                    } catch (error) {
+                      console.error('[UxTension] Close sidebar error:', error);
+                      r({ success: false, error: error.toString() });
+                    }
+                  })(),
+                  true
+                );
+              }
+            });
         },
         { "@parcel/transformer-js/src/esmodule-helpers.js": "hbR2Q" },
       ],

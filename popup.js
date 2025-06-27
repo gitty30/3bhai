@@ -25,7 +25,12 @@ window.addEventListener('DOMContentLoaded', function() {
   // Initialize with mock data
   loadTheme(); // Load theme first
 
-  document.getElementById('usernameChanges').textContent = profileData.usernameChanges + '/4';
+  // Initialize Identity Switches with loading state
+  updateIdentitySwitches([]);
+  
+  // Fetch real Twitter data for the current user
+  fetchAndUpdateTwitterData();
+  
   document.getElementById('accountAge').textContent = profileData.accountAge;
   document.getElementById('activityScore').textContent = profileData.activityScore + '/10';
   document.getElementById('followers').textContent = profileData.followers;
@@ -35,7 +40,7 @@ window.addEventListener('DOMContentLoaded', function() {
     animateWalletAddress();
   }, 1000);
 
-  updateRiskLevel(profileData.usernameChanges);
+  // Update PnL display
   updatePnL(profileData.pnl);
 
   // Hide PnL section if no wallet data (simulate)
@@ -158,12 +163,44 @@ const profileData = {
   walletAddress: '0x742d35Cc6634C0532925a3b8D4068' + Math.random().toString(36).substr(2, 8)
 };
 
+// Function to update Identity Switches display
+function updateIdentitySwitches(usernameChangesArray) {
+  const changesCount = usernameChangesArray ? usernameChangesArray.length : 0;
+  const changesElement = document.getElementById('usernameChanges');
+  const descElement = document.querySelector('.alert-desc');
+  
+  // Update the count display
+  if (changesElement) {
+    if (changesCount === 0 && (!usernameChangesArray || usernameChangesArray.length === 0)) {
+      changesElement.textContent = '...';
+    } else {
+      changesElement.textContent = changesCount;
+    }
+  }
+  
+  // Update the description based on count
+  if (descElement) {
+    if (changesCount === 0 && (!usernameChangesArray || usernameChangesArray.length === 0)) {
+      descElement.textContent = 'Loading username history...';
+    } else if (changesCount < 3) {
+      descElement.textContent = 'Not much for a Scammer!';
+    } else if (changesCount >= 3 && changesCount <= 5) {
+      descElement.textContent = 'Hmmm. Suspicious!';
+    } else {
+      descElement.textContent = 'Multiple aliases detected - High scam probability';
+    }
+  }
+  
+  // Update risk level based on changes
+  updateRiskLevel(changesCount);
+}
+
 function updateRiskLevel(changes) {
   const riskElement = document.getElementById('riskLevel');
-  if (changes <= 4) {
+  if (changes < 3) {
     riskElement.textContent = 'SECURE';
     riskElement.className = 'risk-level threat-low';
-  } else if (changes <= 6) {
+  } else if (changes >= 3 && changes <= 5) {
     riskElement.textContent = 'MODERATE';
     riskElement.className = 'risk-level threat-medium';
   } else {
@@ -216,6 +253,12 @@ function updateProfileUI(data, fallback) {
   if (usernameDiv) {
     usernameDiv.textContent = data.username || fallback.username || 'Not found';
   }
+  
+  // Username Changes Array
+  if (data.usernameChangesArray) {
+    updateIdentitySwitches(data.usernameChangesArray);
+  }
+  
   // Verification
   const verificationDiv = document.getElementById('verification');
   const verifiedIcon = document.getElementById('verifiedIcon');
@@ -344,6 +387,9 @@ function scanProfile() {
                 const tabId = tabs[0].id;
                 const data = await safeTabsSendMessage(tabId, { action: 'get_profile_data' });
                 updateProfileUI(data || {}, profileData);
+                
+                // Also refresh Twitter data
+                fetchAndUpdateTwitterData();
             } else {
                 updateProfileUI({}, profileData);
             }
@@ -445,6 +491,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.action === "getTabId") {
             sendResponse({ tabId: sender.tab?.id || null });
         }
+        // Listen for Twitter data updates
+        if (message.action === "twitterDataFetched") {
+            console.log('[POPUP] Twitter data updated:', message.data);
+            updateIdentitySwitches(message.data);
+        }
     } catch (e) {
         console.warn('[POPUP] Error handling message:', e.message);
         sendResponse({});
@@ -497,4 +548,39 @@ document.getElementById('side-bar').addEventListener('click', async () => {
   });
 
   await chrome.sidePanel.open({ tabId: tab.id });
+  
+  // Close the popup after opening the sidebar
+  window.close();
 });
+
+// Function to fetch Twitter data from storage and update Identity Switches
+async function fetchAndUpdateTwitterData() {
+  try {
+    // Get current tab to extract username
+    const tabs = await safeTabsQuery({ active: true, currentWindow: true });
+    if (tabs.length === 0) return;
+    
+    const tab = tabs[0];
+    const url = tab.url;
+    const match = url.match(/x\.com\/([A-Za-z0-9_]+)/);
+    if (!match) return;
+    
+    const username = match[1];
+    
+    // Fetch stored Twitter data for this username
+    const storageKey = `ux_twitter_${username}`;
+    chrome.storage.local.get([storageKey], function(result) {
+      if (result[storageKey]) {
+        console.log(`[POPUP] Found Twitter data for @${username}:`, result[storageKey]);
+        updateIdentitySwitches(result[storageKey]);
+      } else {
+        console.log(`[POPUP] No Twitter data found for @${username}`);
+        // Keep the loading state or show default
+        updateIdentitySwitches([]);
+      }
+    });
+  } catch (error) {
+    console.warn('[POPUP] Error fetching Twitter data:', error);
+    updateIdentitySwitches([]);
+  }
+}

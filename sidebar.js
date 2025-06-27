@@ -80,12 +80,24 @@ function toggleSpeech() {
 	const speechToggle = document.getElementById('speechToggle');
 	
 	if (speechEnabled) {
-		speechToggle.textContent = '🔊';
+		// Update to use volume-on SVG
+		speechToggle.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume2-icon lucide-volume-2">
+			<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/>
+			<path d="M16 9a5 5 0 0 1 0 6"/>
+			<path d="M19.364 18.364a9 9 0 0 0 0-12.728"/>
+		</svg>`;
 		speechToggle.title = 'Disable Speech';
 		speechToggle.classList.add('speech-enabled');
 		speechToggle.classList.remove('speech-disabled');
 	} else {
-		speechToggle.textContent = '🔇';
+		// Update to use volume-off SVG
+		speechToggle.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume-off-icon lucide-volume-off">
+			<path d="M16 9a5 5 0 0 1 .95 2.293"/>
+			<path d="M19.364 5.636a9 9 0 0 1 1.889 9.96"/>
+			<path d="m2 2 20 20"/>
+			<path d="m7 7-.587.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298V11"/>
+			<path d="M9.828 4.172A.686.686 0 0 1 11 4.657v.686"/>
+		</svg>`;
 		speechToggle.title = 'Enable Speech';
 		speechToggle.classList.add('speech-disabled');
 		speechToggle.classList.remove('speech-enabled');
@@ -136,12 +148,24 @@ function updateSpeechToggleUI() {
 	if (!speechToggle) return;
 	
 	if (speechEnabled) {
-		speechToggle.textContent = '🔊';
+		// Update to use volume-on SVG
+		speechToggle.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume2-icon lucide-volume-2">
+			<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/>
+			<path d="M16 9a5 5 0 0 1 0 6"/>
+			<path d="M19.364 18.364a9 9 0 0 0 0-12.728"/>
+		</svg>`;
 		speechToggle.title = 'Disable Speech';
 		speechToggle.classList.add('speech-enabled');
 		speechToggle.classList.remove('speech-disabled');
 	} else {
-		speechToggle.textContent = '🔇';
+		// Update to use volume-off SVG
+		speechToggle.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume-off-icon lucide-volume-off">
+			<path d="M16 9a5 5 0 0 1 .95 2.293"/>
+			<path d="M19.364 5.636a9 9 0 0 1 1.889 9.96"/>
+			<path d="m2 2 20 20"/>
+			<path d="m7 7-.587.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298V11"/>
+			<path d="M9.828 4.172A.686.686 0 0 1 11 4.657v.686"/>
+		</svg>`;
 		speechToggle.title = 'Enable Speech';
 		speechToggle.classList.add('speech-disabled');
 		speechToggle.classList.remove('speech-enabled');
@@ -365,14 +389,28 @@ function toggleTheme() {
 
 	if (currentTheme === 'light') {
 		body.removeAttribute('data-theme');
-		themeIcon.textContent = '🌙';
+		// Update to use moon SVG
+		themeIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-moon">
+			<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+		</svg>`;
 		// For extension: use chrome.storage instead of localStorage
 		if (typeof chrome !== 'undefined' && chrome.storage) {
 			chrome.storage.local.set({theme: 'dark'});
 		}
 	} else {
 		body.setAttribute('data-theme', 'light');
-		themeIcon.textContent = '☀️';
+		// Update to use sun SVG
+		themeIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun">
+			<circle cx="12" cy="12" r="4"/>
+			<path d="M12 2v2"/>
+			<path d="M12 20v2"/>
+			<path d="m4.93 4.93 1.41 1.41"/>
+			<path d="m17.66 17.66 1.41 1.41"/>
+			<path d="M2 12h2"/>
+			<path d="M20 12h2"/>
+			<path d="m6.34 17.66-1.41 1.41"/>
+			<path d="m19.07 4.93-1.41 1.41"/>
+		</svg>`;
 		// For extension: use chrome.storage instead of localStorage
 		if (typeof chrome !== 'undefined' && chrome.storage) {
 			chrome.storage.local.set({theme: 'light'});
@@ -389,9 +427,23 @@ function loadTheme() {
 		chrome.storage.local.get(['theme'], function(result) {
 			if (result.theme === 'light') {
 				document.body.setAttribute('data-theme', 'light');
-				themeIcon.textContent = '☀️';
+				// Update to use sun SVG
+				themeIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun">
+					<circle cx="12" cy="12" r="4"/>
+					<path d="M12 2v2"/>
+					<path d="M12 20v2"/>
+					<path d="m4.93 4.93 1.41 1.41"/>
+					<path d="m17.66 17.66 1.41 1.41"/>
+					<path d="M2 12h2"/>
+					<path d="M20 12h2"/>
+					<path d="m6.34 17.66-1.41 1.41"/>
+					<path d="m19.07 4.93-1.41 1.41"/>
+				</svg>`;
 			} else {
-				themeIcon.textContent = '🌙';
+				// Update to use moon SVG
+				themeIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-moon">
+					<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+				</svg>`;
 			}
 		});
 	} else {
@@ -399,9 +451,23 @@ function loadTheme() {
 		const savedTheme = localStorage.getItem('theme');
 		if (savedTheme === 'light') {
 			document.body.setAttribute('data-theme', 'light');
-			themeIcon.textContent = '☀️';
+			// Update to use sun SVG
+			themeIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun">
+				<circle cx="12" cy="12" r="4"/>
+				<path d="M12 2v2"/>
+				<path d="M12 20v2"/>
+				<path d="m4.93 4.93 1.41 1.41"/>
+				<path d="m17.66 17.66 1.41 1.41"/>
+				<path d="M2 12h2"/>
+				<path d="M20 12h2"/>
+				<path d="m6.34 17.66-1.41 1.41"/>
+				<path d="m19.07 4.93-1.41 1.41"/>
+			</svg>`;
 		} else {
-			themeIcon.textContent = '🌙';
+			// Update to use moon SVG
+			themeIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-moon">
+				<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+			</svg>`;
 		}
 	}
 }
@@ -423,6 +489,18 @@ document.addEventListener('DOMContentLoaded', function() {
 	const speechToggleBtn = document.getElementById('speechToggle');
 	if (speechToggleBtn) {
 		speechToggleBtn.addEventListener('click', toggleSpeech);
+	}
+
+	// Add theme toggle button event listener if it exists
+	const themeToggleBtn = document.getElementById('themeIcon');
+	if (themeToggleBtn) {
+		themeToggleBtn.addEventListener('click', toggleTheme);
+	}
+
+	// Add close sidebar button event listener if it exists
+	const closeSidebarBtn = document.getElementById('closeSidebar');
+	if (closeSidebarBtn) {
+		closeSidebarBtn.addEventListener('click', closeSidebar);
 	}
 
 	// Initialize with settings
@@ -471,4 +549,14 @@ function safeSendMessage(message) {
 			resolve(null);
 		}
 	});
+}
+
+// Close sidebar function
+function closeSidebar() {
+	// Send message to background script to close the sidebar
+	if (typeof chrome !== 'undefined' && chrome.runtime) {
+		chrome.runtime.sendMessage({
+			action: 'closeSidebar'
+		});
+	}
 }

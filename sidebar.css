@@ -67,7 +67,7 @@ body {
 	min-height: 100%;
 	background: var(--bg-primary) no-repeat;
 	background-origin: border-box;
-	font-family: 'Orbitron', monospace;
+	font-family:  monospace;
 	color: var(--text-primary);
 	position: relative;
 	transition: all 0.3s ease;
@@ -154,6 +154,26 @@ body {
 	color: var(--text-secondary);
 	border-color: var(--text-secondary);
 	opacity: 0.6;
+}
+
+.control-btn.close-btn {
+	color: var(--red-danger);
+	border-color: var(--red-danger);
+}
+
+.control-btn.close-btn:hover {
+	background: var(--red-danger);
+	color: white;
+	transform: scale(1.05);
+}
+
+.control-btn.close-btn:active {
+	transform: scale(0.95);
+}
+
+.control-btn svg {
+	width: 16px;
+	height: 16px;
 }
 
 .chat-toggle {
@@ -276,7 +296,7 @@ body {
 	padding: 6px 12px;
 	color: var(--text-primary);
 	font-size: 11px;
-	font-family: 'Orbitron', monospace;
+	font-family: monospace;
 	outline: none;
 	transition: all 0.2s ease;
 }
