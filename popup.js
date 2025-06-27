@@ -22,31 +22,8 @@ window.addEventListener('DOMContentLoaded', function() {
     scanBtn.addEventListener('click', scanProfile);
   }
 
-  const chatToggleBtn = document.getElementById('chatToggle');
-  if (chatToggleBtn) {
-    chatToggleBtn.addEventListener('click', toggleChat);
-  }
-
-  const chatSendBtn = document.getElementById('chatSend');
-  if (chatSendBtn) {
-    chatSendBtn.addEventListener('click', sendMessage);
-  }
-
-  const chatInput = document.getElementById('chatInput');
-  if (chatInput) {
-    chatInput.addEventListener('keypress', handleChatKeyPress);
-  }
-
-  // Add speech toggle button event listener
-  const speechToggleBtn = document.getElementById('speechToggle');
-  if (speechToggleBtn) {
-    speechToggleBtn.addEventListener('click', toggleSpeech);
-  }
-
   // Initialize with mock data
   loadTheme(); // Load theme first
-  loadSpeechSettings(); // Load speech settings
-  preloadBestVoice(); // Preload the best available voice for faster speech
 
   document.getElementById('usernameChanges').textContent = profileData.usernameChanges + '/4';
   document.getElementById('accountAge').textContent = profileData.accountAge;
@@ -65,280 +42,7 @@ window.addEventListener('DOMContentLoaded', function() {
   if (Math.random() < 0.3) {
     document.getElementById('pnlSection').style.display = 'none';
   }
-
-  // Speak the initial AI message after a short delay
-  setTimeout(() => {
-    const initialMessage = "Hello! I'm your AI security analyst. How can I help you with this profile analysis?";
-    speakText(initialMessage);
-  }, 2000);
 });
-
-// Speech synthesis variables
-let speechEnabled = true;
-let speechSynthesis = window.speechSynthesis;
-let currentUtterance = null;
-let cachedVoice = null; // Cache the best available voice
-
-// Check if speech synthesis is supported
-const isSpeechSupported = () => {
-  return 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
-};
-
-// Preload and cache the best available voice
-function preloadBestVoice() {
-  if (!isSpeechSupported()) return;
-  
-  const loadVoice = () => {
-    const voices = speechSynthesis.getVoices();
-    if (voices.length === 0) return;
-    
-    // Enhanced voice selection with better preferences
-    let preferredVoice = null;
-    
-    // Priority 1: Google voices (usually better quality)
-    preferredVoice = voices.find(voice => 
-      voice.lang.includes('en') && 
-      (voice.name.includes('Google') || voice.name.includes('Chrome'))
-    );
-    
-    // Priority 2: Natural-sounding voices
-    if (!preferredVoice) {
-      preferredVoice = voices.find(voice => 
-        voice.lang.includes('en') && 
-        (voice.name.includes('Natural') || voice.name.includes('Premium') || voice.name.includes('Enhanced'))
-      );
-    }
-    
-    // Priority 3: Female voices (often sound more natural for AI assistants)
-    if (!preferredVoice) {
-      preferredVoice = voices.find(voice => 
-        voice.lang.includes('en') && 
-        (voice.name.includes('Female') || voice.name.includes('Samantha') || voice.name.includes('Victoria'))
-      );
-    }
-    
-    // Priority 4: Any English voice
-    if (!preferredVoice) {
-      preferredVoice = voices.find(voice => 
-        voice.lang.includes('en')
-      );
-    }
-    
-    // Priority 5: Fallback to first available voice
-    if (!preferredVoice && voices.length > 0) {
-      preferredVoice = voices[0];
-    }
-    
-    if (preferredVoice) {
-      cachedVoice = preferredVoice;
-      console.log('Cached voice:', preferredVoice.name);
-    }
-  };
-  
-  // Try to load immediately if voices are available
-  loadVoice();
-  
-  // If voices aren't loaded yet, wait for them
-  if (speechSynthesis.getVoices().length === 0) {
-    speechSynthesis.onvoiceschanged = loadVoice;
-  }
-}
-
-// Toggle speech on/off
-function toggleSpeech() {
-  if (!isSpeechSupported()) {
-    console.warn('Speech synthesis not supported in this browser');
-    return;
-  }
-  
-  speechEnabled = !speechEnabled;
-  const speechToggle = document.getElementById('speechToggle');
-  
-  if (speechEnabled) {
-    speechToggle.textContent = '🔊';
-    speechToggle.title = 'Disable Speech';
-    speechToggle.classList.add('speech-enabled');
-    speechToggle.classList.remove('speech-disabled');
-  } else {
-    speechToggle.textContent = '🔇';
-    speechToggle.title = 'Enable Speech';
-    speechToggle.classList.add('speech-disabled');
-    speechToggle.classList.remove('speech-enabled');
-    // Stop any current speech
-    if (currentUtterance && speechSynthesis.speaking) {
-      speechSynthesis.cancel();
-    }
-  }
-  
-  // Save setting
-  if (typeof chrome !== 'undefined' && chrome.storage) {
-    chrome.storage.local.set({speechEnabled: speechEnabled});
-  }
-}
-
-// Load speech settings
-function loadSpeechSettings() {
-  const speechToggle = document.getElementById('speechToggle');
-  
-  // Check if speech synthesis is supported
-  if (!isSpeechSupported()) {
-    if (speechToggle) {
-      speechToggle.disabled = true;
-      speechToggle.title = 'Speech synthesis not supported';
-      speechToggle.style.opacity = '0.5';
-      speechToggle.style.cursor = 'not-allowed';
-    }
-    speechEnabled = false;
-    return;
-  }
-  
-  if (typeof chrome !== 'undefined' && chrome.storage) {
-    chrome.storage.local.get(['speechEnabled'], function(result) {
-      speechEnabled = result.speechEnabled !== false; // Default to true
-      updateSpeechToggleUI();
-    });
-  } else {
-    // Fallback for testing
-    const savedSpeech = localStorage.getItem('speechEnabled');
-    speechEnabled = savedSpeech !== 'false'; // Default to true
-    updateSpeechToggleUI();
-  }
-}
-
-// Update speech toggle UI
-function updateSpeechToggleUI() {
-  const speechToggle = document.getElementById('speechToggle');
-  if (!speechToggle) return;
-  
-  if (speechEnabled) {
-    speechToggle.textContent = '🔊';
-    speechToggle.title = 'Disable Speech';
-    speechToggle.classList.add('speech-enabled');
-    speechToggle.classList.remove('speech-disabled');
-  } else {
-    speechToggle.textContent = '🔇';
-    speechToggle.title = 'Enable Speech';
-    speechToggle.classList.add('speech-disabled');
-    speechToggle.classList.remove('speech-enabled');
-  }
-}
-
-// Speak text using speech synthesis
-function speakText(text) {
-  if (!speechEnabled || !speechSynthesis || !isSpeechSupported()) return;
-  
-  // Stop any current speech
-  if (speechSynthesis.speaking) {
-    speechSynthesis.cancel();
-  }
-  
-  // Create new utterance
-  currentUtterance = new SpeechSynthesisUtterance(text);
-  
-  // Configure speech settings for faster, more natural speech
-  currentUtterance.rate = 1.2; // Faster than before (was 0.9)
-  currentUtterance.pitch = 1.1; // Slightly higher pitch for more natural sound
-  currentUtterance.volume = 0.9; // Slightly louder
-  
-  // Use cached voice if available for faster performance
-  if (cachedVoice) {
-    currentUtterance.voice = cachedVoice;
-    console.log('Using cached voice:', cachedVoice.name);
-    
-    // Add event listeners
-    currentUtterance.onstart = () => {
-      console.log('Speech started with cached voice:', cachedVoice.name);
-    };
-    
-    currentUtterance.onend = () => {
-      console.log('Speech ended');
-      currentUtterance = null;
-    };
-    
-    currentUtterance.onerror = (event) => {
-      console.error('Speech error:', event.error);
-      currentUtterance = null;
-    };
-    
-    // Speak immediately with cached voice
-    speechSynthesis.speak(currentUtterance);
-    return;
-  }
-  
-  // Fallback to dynamic voice selection if no cached voice
-  const speakWithVoice = () => {
-    const voices = speechSynthesis.getVoices();
-    
-    // Enhanced voice selection with better preferences
-    let preferredVoice = null;
-    
-    // Priority 1: Google voices (usually better quality)
-    preferredVoice = voices.find(voice => 
-      voice.lang.includes('en') && 
-      (voice.name.includes('Google') || voice.name.includes('Chrome'))
-    );
-    
-    // Priority 2: Natural-sounding voices
-    if (!preferredVoice) {
-      preferredVoice = voices.find(voice => 
-        voice.lang.includes('en') && 
-        (voice.name.includes('Natural') || voice.name.includes('Premium') || voice.name.includes('Enhanced'))
-      );
-    }
-    
-    // Priority 3: Female voices (often sound more natural for AI assistants)
-    if (!preferredVoice) {
-      preferredVoice = voices.find(voice => 
-        voice.lang.includes('en') && 
-        (voice.name.includes('Female') || voice.name.includes('Samantha') || voice.name.includes('Victoria'))
-      );
-    }
-    
-    // Priority 4: Any English voice
-    if (!preferredVoice) {
-      preferredVoice = voices.find(voice => 
-        voice.lang.includes('en')
-      );
-    }
-    
-    // Priority 5: Fallback to first available voice
-    if (!preferredVoice && voices.length > 0) {
-      preferredVoice = voices[0];
-    }
-    
-    if (preferredVoice) {
-      currentUtterance.voice = preferredVoice;
-      // Cache this voice for future use
-      cachedVoice = preferredVoice;
-      console.log('Using voice:', preferredVoice.name);
-    }
-    
-    // Add event listeners
-    currentUtterance.onstart = () => {
-      console.log('Speech started with voice:', currentUtterance.voice?.name);
-    };
-    
-    currentUtterance.onend = () => {
-      console.log('Speech ended');
-      currentUtterance = null;
-    };
-    
-    currentUtterance.onerror = (event) => {
-      console.error('Speech error:', event.error);
-      currentUtterance = null;
-    };
-    
-    // Speak the text
-    speechSynthesis.speak(currentUtterance);
-  };
-  
-  // Check if voices are loaded, if not wait for them
-  if (speechSynthesis.getVoices().length > 0) {
-    speakWithVoice();
-  } else {
-    speechSynthesis.onvoiceschanged = speakWithVoice;
-  }
-}
 
 // --- Utility: Observe URL changes using MutationObserver (for SPA navigation) ---
 function observeUrlChange(callback) {
@@ -361,12 +65,6 @@ function statsScrapper(walletAddress) {
     wallet: walletAddress,
     stats: {}, // Fill with real stats
   };
-}
-
-// --- Dummy  function for chatbot integration (to be implemented) ---
-function chatbotFunctionality(message) {
-  // TODO: Integrate with chatbot backend or API
-  return "[Chatbot reply placeholder]";
 }
 
 // Typewriter effect for wallet address
@@ -399,98 +97,6 @@ function animateWalletAddress() {
   const fullAddress = profileData.walletAddress + '...';
   
   typewriterEffect(walletElement, fullAddress, 80);
-}
-
-// Chat functionality
-console.log("chat functionality");
-let chatCollapsed = false;
-
-function toggleChat() {
-  const chatMessages = document.getElementById('chatMessages');
-  const chatInputContainer = document.getElementById('chatInputContainer');
-  const chatToggle = document.getElementById('chatToggle');
-
-  chatCollapsed = !chatCollapsed;
-
-  if (chatCollapsed) {
-    chatMessages.classList.add('collapsed');
-    chatInputContainer.classList.add('collapsed');
-    chatToggle.textContent = '▼';
-  } else {
-    chatMessages.classList.remove('collapsed');
-    chatInputContainer.classList.remove('collapsed');
-    chatToggle.textContent = '▲';
-  }
-}
-
-function sendMessage() {
-  const chatInput = document.getElementById('chatInput');
-  const message = chatInput.value.trim();
-
-  if (!message) return;
-
-  // Add user message
-  addMessage(message, 'user');
-  chatInput.value = '';
-
-  // Show typing indicator
-  const typingIndicator = addMessage('Thinking...', 'ai');
-  typingIndicator.classList.add('typing');
-
-  // Call background script for AI response
-  try {
-    chrome.runtime.sendMessage({
-      action: 'chatWithAI',
-      message: message
-    }, (response) => {
-      // Remove typing indicator
-      typingIndicator.remove();
-      
-      if (chrome.runtime.lastError) {
-        console.error('Runtime error:', chrome.runtime.lastError);
-        const errorMsg = 'Sorry, I encountered a connection error. Please try again.';
-        addMessage(errorMsg, 'ai');
-        return;
-      }
-      
-      if (response && response.success) {
-        addMessage(response.response, 'ai');
-        // Speak the AI response
-        speakText(response.response);
-      } else {
-        const errorMessage = response?.error || 'Sorry, I encountered an error. Please try again.';
-        addMessage(errorMessage, 'ai');
-        // Speak the error message too
-        speakText(errorMessage);
-      }
-    });
-  } catch (error) {
-    // Remove typing indicator
-    typingIndicator.remove();
-    console.error('Error sending message:', error);
-    const errorMsg = 'Sorry, I encountered an error. Please try again.';
-    addMessage(errorMsg, 'ai');
-    // Speak the error message
-    speakText(errorMsg);
-  }
-}
-
-function addMessage(text, type) {
-  const chatMessages = document.getElementById('chatMessages');
-  const messageDiv = document.createElement('div');
-  messageDiv.className = `message ${type}`;
-  messageDiv.textContent = text;
-
-  chatMessages.appendChild(messageDiv);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-  
-  return messageDiv;
-}
-
-function handleChatKeyPress(event) {
-  if (event.key === 'Enter') {
-    sendMessage();
-  }
 }
 
 // Theme management
@@ -743,12 +349,10 @@ function scanProfile() {
             }
             
             loadingElement.classList.remove('active');
-            addMessage("Deep scan completed. Profile data has been updated with latest intelligence.", 'system');
         } catch (e) {
             console.warn('[POPUP] Error in scanProfile:', e.message);
             updateProfileUI({}, profileData);
             loadingElement.classList.remove('active');
-            addMessage("Deep scan completed. Profile data has been updated with latest intelligence.", 'system');
         }
     }, 2500);
 }
@@ -879,3 +483,18 @@ setInterval(() => {
         console.warn('[POPUP] Error in dynamic scanning effect:', e.message);
     }
 }, 3000);
+
+document.getElementById('side-bar').addEventListener('click', async () => {
+  const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+  });
+
+  await chrome.sidePanel.setOptions({
+      tabId: tab.id,
+      path: 'sidebar.html',
+      enabled: true,
+  });
+
+  await chrome.sidePanel.open({ tabId: tab.id });
+});

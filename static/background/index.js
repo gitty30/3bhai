@@ -530,7 +530,7 @@ var e, t;
                           context = await contextResponse.text();
                         }
                       } catch (contextError) {
-                        console.warn('[UxTension] Could not load context file, using fallback:', contextError);
+                        console.warn('[NEURAL_SCAN] Could not load context file, using fallback:', contextError);
                         context = 'You are a helpful AI assistant for UxTension, a browser extension that provides security analysis and threat detection for social media profiles.';
                       }
                       

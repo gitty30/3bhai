@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Neural Assistant</title>
+		<link rel="stylesheet" href="sidebar.css" />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap"
+			rel="stylesheet"
+		/>
+	</head>
+	<body>
+		<!-- Chat Container -->
+		<div class="chat-container">
+			<div class="chat-header">
+				<span class="chat-title">Neural Assistant</span>
+				<div class="chat-controls">
+					<button id="speechToggle" class="control-btn speech-enabled" title="Disable Speech">🔊</button>
+					<button id="themeIcon" class="control-btn" title="Toggle Theme">🌙</button>
+				</div>
+			</div>
+
+			<div class="chat-messages" id="chatMessages">
+				<div class="message system">
+					Neural Assistant v3.0 initialized
+				</div>
+				<div class="message ai">
+					Hello! I'm your AI security analyst. How can I help you with
+					this profile analysis?
+				</div>
+			</div>
+
+			<div class="chat-input-container" id="chatInputContainer">
+				<input
+					type="text"
+					class="chat-input"
+					placeholder="Ask about security analysis..."
+					id="chatInput"
+				/>
+				<button class="chat-send" id="chatSend">></button>
+			</div>
+		</div>
+
+		<script src="sidebar.js"></script>
+	</body>
+</html>
