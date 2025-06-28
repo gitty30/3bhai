@@ -920,21 +920,33 @@ function animateBarGraphs(analysis) {
     const neutral = analysis.sentiment.neutral || 0;
     const total = bullish + bearish + neutral;
     
-    // Calculate percentages (minimum width only if value > 0)
-    const minWidth = 8; // percent
-    const bullishPercent = total > 0 ? (bullish > 0 ? Math.max((bullish / total) * 100, minWidth) : 0) : 0;
-    const bearishPercent = total > 0 ? (bearish > 0 ? Math.max((bearish / total) * 100, minWidth) : 0) : 0;
-    const neutralPercent = total > 0 ? (neutral > 0 ? Math.max((neutral / total) * 100, minWidth) : 0) : 0;
-
-    // If only one bar is nonzero, make it 100%
-    const nonZeroBars = [bullish, neutral, bearish].filter(v => v > 0).length;
-    if (nonZeroBars === 1) {
+    // Calculate percentages - only show fill if value > 0
+    let bullishPercent = 0;
+    let bearishPercent = 0;
+    let neutralPercent = 0;
+    
+    if (total > 0) {
+        // Only show bars for values > 0
         if (bullish > 0) {
-            bullishPercent = 100;
-        } else if (neutral > 0) {
-            neutralPercent = 100;
-        } else if (bearish > 0) {
-            bearishPercent = 100;
+            bullishPercent = (bullish / total) * 100;
+        }
+        if (bearish > 0) {
+            bearishPercent = (bearish / total) * 100;
+        }
+        if (neutral > 0) {
+            neutralPercent = (neutral / total) * 100;
+        }
+        
+        // If only one bar is nonzero, make it 100%
+        const nonZeroBars = [bullish, neutral, bearish].filter(v => v > 0).length;
+        if (nonZeroBars === 1) {
+            if (bullish > 0) {
+                bullishPercent = 100;
+            } else if (neutral > 0) {
+                neutralPercent = 100;
+            } else if (bearish > 0) {
+                bearishPercent = 100;
+            }
         }
     }
 
