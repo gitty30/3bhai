@@ -142,48 +142,140 @@ function statsScrapper(walletAddress) {
 function toggleTheme() {
   const body = document.body;
   const themeIcon = document.getElementById('themeIcon');
+  const themeLabel = document.getElementById('themeLabel');
+  const themeTransition = document.getElementById('themeTransition');
   const currentTheme = body.getAttribute('data-theme');
 
-  if (currentTheme === 'light') {
-    body.removeAttribute('data-theme');
-    themeIcon.textContent = '🌙';
-    // For extension: use chrome.storage instead of localStorage
-    if (typeof chrome !== 'undefined' && chrome.storage) {
-      chrome.storage.local.set({theme: 'dark'});
-    }
-  } else {
-    body.setAttribute('data-theme', 'light');
-    themeIcon.textContent = '☀️';
-    // For extension: use chrome.storage instead of localStorage
-    if (typeof chrome !== 'undefined' && chrome.storage) {
-      chrome.storage.local.set({theme: 'light'});
-    }
+  // Define all themes with their icons and labels
+  const themes = [
+    { name: 'dark', icon: '🌙', label: 'Dark' },
+    { name: 'light', icon: '☀️', label: 'Light' },
+    { name: 'cyberpunk', icon: '🤖', label: 'Cyber' },
+    { name: 'sunset', icon: '🌅', label: 'Sunset' },
+    { name: 'ocean', icon: '🌊', label: 'Ocean' },
+    { name: 'forest', icon: '🌲', label: 'Forest' },
+    { name: 'neon', icon: '💫', label: 'Neon' }
+  ];
+
+  // Find current theme index
+  let currentIndex = 0;
+  if (currentTheme) {
+    currentIndex = themes.findIndex(theme => theme.name === currentTheme);
+    if (currentIndex === -1) currentIndex = 0;
   }
+
+  // Move to next theme
+  const nextIndex = (currentIndex + 1) % themes.length;
+  const nextTheme = themes[nextIndex];
+
+  // Trigger theme transition effect
+  if (themeTransition) {
+    themeTransition.classList.add('active');
+    setTimeout(() => {
+      themeTransition.classList.remove('active');
+    }, 300);
+  }
+
+  // Create funky particles
+  createThemeParticles();
+
+  // Apply theme
+  if (nextTheme.name === 'dark') {
+    body.removeAttribute('data-theme');
+  } else {
+    body.setAttribute('data-theme', nextTheme.name);
+  }
+
+  // Update UI
+  // themeIcon.textContent = nextTheme.icon; // Keep SVG palette icon for all themes
+  themeLabel.textContent = nextTheme.label;
+
+  // Add funky animation
+  themeIcon.style.transform = 'rotate(360deg) scale(1.5)';
+  setTimeout(() => {
+    themeIcon.style.transform = 'rotate(0deg) scale(1)';
+  }, 300);
+
+  // Save theme preference
+  if (typeof chrome !== 'undefined' && chrome.storage) {
+    chrome.storage.local.set({theme: nextTheme.name});
+  } else {
+    localStorage.setItem('theme', nextTheme.name);
+  }
+}
+
+// Create funky particles for theme transitions
+function createThemeParticles() {
+  const particlesContainer = document.getElementById('themeParticles');
+  if (!particlesContainer) return;
+
+  // Clear existing particles
+  particlesContainer.innerHTML = '';
+
+  // Create 20 particles
+  for (let i = 0; i < 20; i++) {
+    const particle = document.createElement('div');
+    particle.className = 'particle';
+    
+    // Random position
+    particle.style.left = Math.random() * 100 + '%';
+    particle.style.top = Math.random() * 100 + '%';
+    
+    // Random delay
+    particle.style.animationDelay = Math.random() * 0.5 + 's';
+    
+    // Random size
+    const size = Math.random() * 6 + 2;
+    particle.style.width = size + 'px';
+    particle.style.height = size + 'px';
+    
+    particlesContainer.appendChild(particle);
+  }
+
+  // Remove particles after animation
+  setTimeout(() => {
+    particlesContainer.innerHTML = '';
+  }, 2500);
 }
 
 // Load saved theme
 function loadTheme() {
   const themeIcon = document.getElementById('themeIcon');
+  const themeLabel = document.getElementById('themeLabel');
+  
+  // Define all themes with their icons and labels
+  const themes = [
+    { name: 'dark', icon: '🌙', label: 'Dark' },
+    { name: 'light', icon: '☀️', label: 'Light' },
+    { name: 'cyberpunk', icon: '🤖', label: 'Cyber' },
+    { name: 'sunset', icon: '🌅', label: 'Sunset' },
+    { name: 'ocean', icon: '🌊', label: 'Ocean' },
+    { name: 'forest', icon: '🌲', label: 'Forest' },
+    { name: 'neon', icon: '💫', label: 'Neon' }
+  ];
   
   // For extension: use chrome.storage instead of localStorage
   if (typeof chrome !== 'undefined' && chrome.storage) {
     chrome.storage.local.get(['theme'], function(result) {
-      if (result.theme === 'light') {
-        document.body.setAttribute('data-theme', 'light');
-        themeIcon.textContent = '☀️';
-      } else {
-        themeIcon.textContent = '🌙';
+      const savedTheme = result.theme || 'dark';
+      const theme = themes.find(t => t.name === savedTheme) || themes[0];
+      
+      if (theme.name !== 'dark') {
+        document.body.setAttribute('data-theme', theme.name);
       }
+      // themeIcon.textContent = theme.icon; // Keep SVG palette icon for all themes
+      themeLabel.textContent = theme.label;
     });
   } else {
     // Fallback for testing
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'light') {
-      document.body.setAttribute('data-theme', 'light');
-      themeIcon.textContent = '☀️';
-    } else {
-      themeIcon.textContent = '🌙';
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    const theme = themes.find(t => t.name === savedTheme) || themes[0];
+    
+    if (theme.name !== 'dark') {
+      document.body.setAttribute('data-theme', theme.name);
     }
+    // themeIcon.textContent = theme.icon; // Keep SVG palette icon for all themes
+    themeLabel.textContent = theme.label;
   }
 }
 

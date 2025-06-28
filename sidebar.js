@@ -391,90 +391,139 @@ function handleChatKeyPress(event) {
 function toggleTheme() {
 	const body = document.body;
 	const themeIcon = document.getElementById('themeIcon');
+	const themeLabel = document.getElementById('themeLabel');
 	const currentTheme = body.getAttribute('data-theme');
 
-	if (currentTheme === 'light') {
-		body.removeAttribute('data-theme');
-		// Update to use moon SVG
-		themeIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-moon">
-			<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
-		</svg>`;
-		// For extension: use chrome.storage instead of localStorage
-		if (typeof chrome !== 'undefined' && chrome.storage) {
-			chrome.storage.local.set({theme: 'dark'});
-		}
-	} else {
-		body.setAttribute('data-theme', 'light');
-		// Update to use sun SVG
-		themeIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun">
-			<circle cx="12" cy="12" r="4"/>
-			<path d="M12 2v2"/>
-			<path d="M12 20v2"/>
-			<path d="m4.93 4.93 1.41 1.41"/>
-			<path d="m17.66 17.66 1.41 1.41"/>
-			<path d="M2 12h2"/>
-			<path d="M20 12h2"/>
-			<path d="m6.34 17.66-1.41 1.41"/>
-			<path d="m19.07 4.93-1.41 1.41"/>
-		</svg>`;
-		// For extension: use chrome.storage instead of localStorage
-		if (typeof chrome !== 'undefined' && chrome.storage) {
-			chrome.storage.local.set({theme: 'light'});
-		}
+	// Define all themes with their icons and labels
+	const themes = [
+		{ name: 'dark', icon: '🌙', label: 'Dark' },
+		{ name: 'light', icon: '☀️', label: 'Light' },
+		{ name: 'cyberpunk', icon: '🤖', label: 'Cyber' },
+		{ name: 'sunset', icon: '🌅', label: 'Sunset' },
+		{ name: 'ocean', icon: '🌊', label: 'Ocean' },
+		{ name: 'forest', icon: '🌲', label: 'Forest' },
+		{ name: 'neon', icon: '💫', label: 'Neon' }
+	];
+
+	// Find current theme index
+	let currentIndex = 0;
+	if (currentTheme) {
+		currentIndex = themes.findIndex(theme => theme.name === currentTheme);
+		if (currentIndex === -1) currentIndex = 0;
 	}
+
+	// Move to next theme
+	const nextIndex = (currentIndex + 1) % themes.length;
+	const nextTheme = themes[nextIndex];
+
+	// Apply theme
+	if (nextTheme.name === 'dark') {
+		body.removeAttribute('data-theme');
+	} else {
+		body.setAttribute('data-theme', nextTheme.name);
+	}
+
+	// Update UI - keep the SVG palette icon but update the label
+	themeLabel.textContent = nextTheme.label;
+
+	// Add funky animation to the SVG icon
+	themeIcon.style.transform = 'rotate(360deg) scale(1.5)';
+	setTimeout(() => {
+		themeIcon.style.transform = 'rotate(0deg) scale(1)';
+	}, 300);
+
+	// Create funky particles
+	createThemeParticles();
+
+	// Trigger theme transition effect
+	const themeTransition = document.getElementById('themeTransition');
+	if (themeTransition) {
+		themeTransition.classList.add('active');
+		setTimeout(() => {
+			themeTransition.classList.remove('active');
+		}, 300);
+	}
+
+	// Save theme preference
+	if (typeof chrome !== 'undefined' && chrome.storage) {
+		chrome.storage.local.set({theme: nextTheme.name});
+	} else {
+		localStorage.setItem('theme', nextTheme.name);
+	}
+}
+
+// Create funky particles for theme transitions
+function createThemeParticles() {
+	const particlesContainer = document.getElementById('themeParticles');
+	if (!particlesContainer) return;
+
+	// Clear existing particles
+	particlesContainer.innerHTML = '';
+
+	// Create 15 particles
+	for (let i = 0; i < 15; i++) {
+		const particle = document.createElement('div');
+		particle.className = 'particle';
+		
+		// Random position
+		particle.style.left = Math.random() * 100 + '%';
+		particle.style.top = Math.random() * 100 + '%';
+		
+		// Random delay
+		particle.style.animationDelay = Math.random() * 0.5 + 's';
+		
+		// Random size
+		const size = Math.random() * 6 + 2;
+		particle.style.width = size + 'px';
+		particle.style.height = size + 'px';
+		
+		particlesContainer.appendChild(particle);
+	}
+
+	// Remove particles after animation
+	setTimeout(() => {
+		particlesContainer.innerHTML = '';
+	}, 2500);
 }
 
 // Load saved theme
 function loadTheme() {
 	const themeIcon = document.getElementById('themeIcon');
+	const themeLabel = document.getElementById('themeLabel');
+	
+	// Define all themes with their icons and labels
+	const themes = [
+		{ name: 'dark', icon: '🌙', label: 'Dark' },
+		{ name: 'light', icon: '☀️', label: 'Light' },
+		{ name: 'cyberpunk', icon: '🤖', label: 'Cyber' },
+		{ name: 'sunset', icon: '🌅', label: 'Sunset' },
+		{ name: 'ocean', icon: '🌊', label: 'Ocean' },
+		{ name: 'forest', icon: '🌲', label: 'Forest' },
+		{ name: 'neon', icon: '💫', label: 'Neon' }
+	];
 	
 	// For extension: use chrome.storage instead of localStorage
 	if (typeof chrome !== 'undefined' && chrome.storage) {
 		chrome.storage.local.get(['theme'], function(result) {
-			if (result.theme === 'light') {
-				document.body.setAttribute('data-theme', 'light');
-				// Update to use sun SVG
-				themeIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun">
-					<circle cx="12" cy="12" r="4"/>
-					<path d="M12 2v2"/>
-					<path d="M12 20v2"/>
-					<path d="m4.93 4.93 1.41 1.41"/>
-					<path d="m17.66 17.66 1.41 1.41"/>
-					<path d="M2 12h2"/>
-					<path d="M20 12h2"/>
-					<path d="m6.34 17.66-1.41 1.41"/>
-					<path d="m19.07 4.93-1.41 1.41"/>
-				</svg>`;
-			} else {
-				// Update to use moon SVG
-				themeIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-moon">
-					<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
-				</svg>`;
+			const savedTheme = result.theme || 'dark';
+			const theme = themes.find(t => t.name === savedTheme) || themes[0];
+			
+			if (theme.name !== 'dark') {
+				document.body.setAttribute('data-theme', theme.name);
 			}
+			// Keep the SVG palette icon, just update the label
+			themeLabel.textContent = theme.label;
 		});
 	} else {
 		// Fallback for testing
-		const savedTheme = localStorage.getItem('theme');
-		if (savedTheme === 'light') {
-			document.body.setAttribute('data-theme', 'light');
-			// Update to use sun SVG
-			themeIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun">
-				<circle cx="12" cy="12" r="4"/>
-				<path d="M12 2v2"/>
-				<path d="M12 20v2"/>
-				<path d="m4.93 4.93 1.41 1.41"/>
-				<path d="m17.66 17.66 1.41 1.41"/>
-				<path d="M2 12h2"/>
-				<path d="M20 12h2"/>
-				<path d="m6.34 17.66-1.41 1.41"/>
-				<path d="m19.07 4.93-1.41 1.41"/>
-			</svg>`;
-		} else {
-			// Update to use moon SVG
-			themeIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-moon">
-				<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
-			</svg>`;
+		const savedTheme = localStorage.getItem('theme') || 'dark';
+		const theme = themes.find(t => t.name === savedTheme) || themes[0];
+		
+		if (theme.name !== 'dark') {
+			document.body.setAttribute('data-theme', theme.name);
 		}
+		// Keep the SVG palette icon, just update the label
+		themeLabel.textContent = theme.label;
 	}
 }
 
@@ -498,7 +547,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	}
 
 	// Add theme toggle button event listener if it exists
-	const themeToggleBtn = document.getElementById('themeIcon');
+	const themeToggleBtn = document.getElementById('themeToggle');
 	if (themeToggleBtn) {
 		themeToggleBtn.addEventListener('click', toggleTheme);
 	}

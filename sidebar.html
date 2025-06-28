@@ -9,6 +9,9 @@
 		/>
 	</head>
 	<body>
+		<div class="theme-transition" id="themeTransition"></div>
+		<div class="theme-particles" id="themeParticles"></div>
+
 		<!-- Chat Container -->
 		<div class="chat-container">
 			<div class="chat-header">
@@ -21,10 +24,15 @@
 							<path d="M19.364 18.364a9 9 0 0 0 0-12.728"/>
 						</svg>
 					</button>
-					<button id="themeIcon" class="control-btn" title="Toggle Theme">
-						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-moon">
-							<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+					<button id="themeToggle" class="control-btn theme-toggle" title="Toggle Theme">
+						<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-palette-icon lucide-palette theme-icon" id="themeIcon">
+							<path d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"/>
+							<circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/>
+							<circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/>
+							<circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/>
+							<circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/>
 						</svg>
+						<span id="themeLabel">Dark</span>
 					</button>
 					<button id="closeSidebar" class="control-btn close-btn" title="Close Sidebar">
 						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="pink" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-x-icon lucide-circle-x">
@@ -50,10 +58,15 @@
 				<input
 					type="text"
 					class="chat-input"
-					placeholder="Ask about security analysis..."
+					placeholder="Ask away!"
 					id="chatInput"
 				/>
-				<button class="chat-send" id="chatSend">></button>
+				<button class="chat-send" id="chatSend">
+					<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-send-horizontal-icon lucide-send-horizontal">
+						<path d="M3.714 3.048a.498.498 0 0 0-.683.627l2.843 7.627a2 2 0 0 1 0 1.396l-2.842 7.627a.498.498 0 0 0 .682.627l18-8.5a.5.5 0 0 0 0-.904z"/>
+						<path d="M6 12h16"/>
+					</svg>
+				</button>
 			</div>
 		</div>
 
