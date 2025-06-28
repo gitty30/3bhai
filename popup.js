@@ -22,6 +22,12 @@ window.addEventListener('DOMContentLoaded', function() {
     scanBtn.addEventListener('click', scanProfile);
   }
 
+  // Add event listener for close button
+  const closeBtn = document.querySelector('.close-overlay');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', closeDeepAnalysis);
+  }
+
   // Initialize with mock data
   loadTheme(); // Load theme first
 
@@ -60,6 +66,30 @@ function observeUrlChange(callback) {
   });
   observer.observe(document, { subtree: true, childList: true });
   return observer;
+}
+
+// Check if Chart.js is loaded
+function checkChartJsLoaded() {
+    return new Promise((resolve) => {
+        if (typeof Chart !== 'undefined') {
+            resolve(true);
+            return;
+        }
+        
+        // Wait a bit for Chart.js to load
+        let attempts = 0;
+        const maxAttempts = 10;
+        const checkInterval = setInterval(() => {
+            attempts++;
+            if (typeof Chart !== 'undefined') {
+                clearInterval(checkInterval);
+                resolve(true);
+            } else if (attempts >= maxAttempts) {
+                clearInterval(checkInterval);
+                resolve(false);
+            }
+        }, 100);
+    });
 }
 
 // --- Utility: Scrape stats for a Solana wallet user (dummy implementation) ---
@@ -212,16 +242,18 @@ function updateRiskLevel(changes) {
 function updatePnL(value) {
   const pnlElement = document.getElementById('pnlValue');
   const pnlSection = document.getElementById('pnlSection');
-  const sign = value >= 0 ? '+' : '';
-
-  pnlElement.textContent = `${sign}$${Math.abs(value).toFixed(2)}`;
-
-  if (value >= 0) {
-    pnlElement.className = 'pnl-value';
-    pnlSection.className = 'alert-box alert-success pnl-section';
-  } else {
-    pnlElement.className = 'pnl-value pnl-negative';
-    pnlSection.className = 'alert-box alert-danger pnl-section';
+  
+  if (pnlElement && pnlSection) {
+    const formattedValue = value >= 0 ? `+$${value.toFixed(2)}` : `-$${Math.abs(value).toFixed(2)}`;
+    pnlElement.textContent = formattedValue;
+    
+    if (value >= 0) {
+      pnlElement.classList.remove('pnl-negative');
+      pnlSection.className = 'alert-box alert-success pnl-section';
+    } else {
+      pnlElement.classList.add('pnl-negative');
+      pnlSection.className = 'alert-box alert-danger pnl-section';
+    }
   }
 }
 
@@ -376,31 +408,7 @@ function safeTabsQuery(queryInfo) {
 }
 
 function scanProfile() {
-    const loadingElement = document.getElementById('loading');
-    loadingElement.classList.add('active');
-    
-    setTimeout(async () => {
-        try {
-            const tabs = await safeTabsQuery({ active: true, currentWindow: true });
-            
-            if (tabs.length > 0) {
-                const tabId = tabs[0].id;
-                const data = await safeTabsSendMessage(tabId, { action: 'get_profile_data' });
-                updateProfileUI(data || {}, profileData);
-                
-                // Also refresh Twitter data
-                fetchAndUpdateTwitterData();
-            } else {
-                updateProfileUI({}, profileData);
-            }
-            
-            loadingElement.classList.remove('active');
-        } catch (e) {
-            console.warn('[POPUP] Error in scanProfile:', e.message);
-            updateProfileUI({}, profileData);
-            loadingElement.classList.remove('active');
-        }
-    }, 2500);
+    performDeepAnalysis();
 }
 
 function scrapeUserNameFromPage() {
@@ -584,3 +592,343 @@ async function fetchAndUpdateTwitterData() {
     updateIdentitySwitches([]);
   }
 }
+
+// Function to perform deep tweet analysis
+async function performDeepAnalysis() {
+    try {
+        console.log('🔍 Starting deep analysis in popup...');
+        
+        // Show loading state
+        const loadingElement = document.getElementById('analysisLoading');
+        const resultsElement = document.getElementById('analysisResults');
+        const overlayElement = document.getElementById('deepAnalysisOverlay');
+        
+        console.log('📋 Elements found:', {
+            loading: !!loadingElement,
+            results: !!resultsElement,
+            overlay: !!overlayElement
+        });
+        
+        if (loadingElement) loadingElement.style.display = 'block';
+        if (resultsElement) resultsElement.style.display = 'none';
+        if (overlayElement) overlayElement.style.display = 'flex';
+        
+        console.log('✅ Overlay should now be visible');
+        
+        // Get current tab
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        
+        if (!tab || !tab.url || !tab.url.includes('x.com')) {
+            throw new Error('Please navigate to a Twitter/X profile page');
+        }
+        
+        console.log('📄 Sending analysis request to content script...');
+        
+        // Send message to content script to perform analysis
+        const response = await chrome.tabs.sendMessage(tab.id, {
+            action: 'perform_deep_analysis'
+        });
+        
+        console.log('📊 Received response from content script:', response);
+        
+        if (!response || !response.success) {
+            throw new Error(response?.error || 'Failed to perform analysis');
+        }
+        
+        // Hide loading and show results
+        if (loadingElement) loadingElement.style.display = 'none';
+        if (resultsElement) resultsElement.style.display = 'block';
+        
+        console.log('✅ Analysis results should now be visible');
+        
+        // Update the display with the analysis results
+        updateAnalysisDisplay(response.data);
+        
+    } catch (error) {
+        console.error('❌ Error in deep analysis:', error);
+        
+        // Hide loading
+        const loadingElement = document.getElementById('analysisLoading');
+        if (loadingElement) loadingElement.style.display = 'none';
+        
+        // Show error message
+        alert(`Analysis failed: ${error.message}`);
+    }
+}
+
+// Function to update the analysis display
+function updateAnalysisDisplay(data) {
+    console.log('🎨 Updating analysis display with data:', data);
+    
+    const { tweets, analysis } = data;
+    
+    console.log('📊 Analysis data:', {
+        tweetCount: tweets?.length || 0,
+        sentiment: analysis?.sentiment,
+        primaryFocus: analysis?.primaryFocus,
+        overallSentiment: analysis?.overallSentiment
+    });
+    
+    // Update profile information
+    updateProfileDisplay(data);
+    
+    // Update sentiment analysis
+    updateSentimentDisplay(analysis);
+    
+    // Animate the bar graphs
+    animateBarGraphs(analysis);
+    
+    console.log('✅ Analysis display update complete');
+}
+
+// Function to update profile display
+function updateProfileDisplay(data) {
+    // Get profile data from the current tab
+    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+        const tab = tabs[0];
+        if (tab && tab.url && tab.url.includes('x.com')) {
+            try {
+                const response = await chrome.tabs.sendMessage(tab.id, {
+                    action: 'get_api_profile_data'
+                });
+                
+                if (response && response.id) {
+                    // Update profile avatar
+                    updateProfileAvatar(response.profile_url, response.name);
+                    
+                    // Update profile info
+                    document.getElementById('profileName').textContent = response.name || 'Unknown';
+                    document.getElementById('profileUsername').textContent = `@${response.username || 'unknown'}`;
+                    
+                    // Update stats
+                    document.getElementById('followersCount').textContent = formatNumber(response.followers || 0);
+                    document.getElementById('tweetsCount').textContent = formatNumber(response.statuses || 0);
+                    
+                    // Update verification badges
+                    updateVerificationBadges(response);
+                }
+            } catch (error) {
+                console.warn('Failed to get profile data:', error);
+                // Use fallback data
+                document.getElementById('profileName').textContent = 'Profile Data Unavailable';
+                document.getElementById('profileUsername').textContent = '@unknown';
+            }
+        }
+    });
+}
+
+// Function to update profile avatar
+function updateProfileAvatar(profileUrl, name) {
+    const avatarElement = document.getElementById('profileAvatar');
+    
+    if (profileUrl && profileUrl.trim() !== '') {
+        const img = new Image();
+        img.onload = function() {
+            avatarElement.innerHTML = '';
+            avatarElement.appendChild(img);
+            avatarElement.classList.remove('fallback');
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.style.objectFit = 'cover';
+        };
+        img.onerror = function() {
+            avatarElement.textContent = createFallbackAvatar(name);
+            avatarElement.classList.add('fallback');
+        };
+        img.src = profileUrl;
+    } else {
+        avatarElement.textContent = createFallbackAvatar(name);
+        avatarElement.classList.add('fallback');
+    }
+}
+
+// Function to create fallback avatar
+function createFallbackAvatar(name) {
+    const initials = name.split(' ').map(word => word[0]).join('').substring(0, 2).toUpperCase();
+    return initials;
+}
+
+// Function to update verification badges
+function updateVerificationBadges(profileData) {
+    const badgesContainer = document.getElementById('verificationBadges');
+    badgesContainer.innerHTML = '';
+    
+    if (profileData.blue_verified) {
+        badgesContainer.innerHTML += '<span class="badge blue-verified">Blue ✓</span>';
+    }
+    if (!profileData.phone_verified) {
+        badgesContainer.innerHTML += '<span class="badge suspicious">Phone ⚠</span>';
+    }
+    if (profileData.verified) {
+        badgesContainer.innerHTML += '<span class="badge blue-verified">Verified ✓</span>';
+    }
+}
+
+// Function to update sentiment display
+function updateSentimentDisplay(analysis) {
+    const bullish = analysis.sentiment.bullish || 0;
+    const bearish = analysis.sentiment.bearish || 0;
+    const neutral = analysis.sentiment.neutral || 0;
+    const total = bullish + bearish + neutral;
+    
+    // Update values in the bars (counts are now shown on the right)
+    document.getElementById('bullishCount').textContent = bullish;
+    document.getElementById('bearishCount').textContent = bearish;
+    document.getElementById('neutralCount').textContent = neutral;
+    
+    // Update overall sentiment
+    const overallElement = document.getElementById('overallSentiment');
+    const overallValue = document.getElementById('overallValue');
+    
+    overallElement.className = `overall-sentiment ${analysis.overallSentiment}`;
+    overallValue.textContent = analysis.overallSentiment.toUpperCase();
+    
+    // Update content analysis
+    document.getElementById('primaryFocus').textContent = analysis.primaryFocus.toUpperCase();
+    
+    const adviceText = analysis.financialAdviceCount === 1 ? '1 tweet' : `${analysis.financialAdviceCount} tweets`;
+    document.getElementById('financialAdvice').textContent = adviceText;
+    document.getElementById('totalTweets').textContent = `${total} tweets`;
+}
+
+// Function to animate bar graphs
+function animateBarGraphs(analysis) {
+    console.log('📈 Starting bar graph animations...');
+    
+    const bullish = analysis.sentiment.bullish || 0;
+    const bearish = analysis.sentiment.bearish || 0;
+    const neutral = analysis.sentiment.neutral || 0;
+    const total = bullish + bearish + neutral;
+    
+    // Calculate percentages (minimum width only if value > 0)
+    const minWidth = 8; // percent
+    const bullishPercent = total > 0 ? (bullish > 0 ? Math.max((bullish / total) * 100, minWidth) : 0) : 0;
+    const bearishPercent = total > 0 ? (bearish > 0 ? Math.max((bearish / total) * 100, minWidth) : 0) : 0;
+    const neutralPercent = total > 0 ? (neutral > 0 ? Math.max((neutral / total) * 100, minWidth) : 0) : 0;
+
+    // If only one bar is nonzero, make it 100%
+    const nonZeroBars = [bullish, neutral, bearish].filter(v => v > 0).length;
+    if (nonZeroBars === 1) {
+        if (bullish > 0) {
+            bullishPercent = 100;
+        } else if (neutral > 0) {
+            neutralPercent = 100;
+        } else if (bearish > 0) {
+            bearishPercent = 100;
+        }
+    }
+
+    console.log('📊 Animating bars:', { 
+        bullish, bearish, neutral, total,
+        bullishPercent, bearishPercent, neutralPercent 
+    });
+    
+    // Get bar elements
+    const bullishBar = document.getElementById('bullishBar');
+    const neutralBar = document.getElementById('neutralBar');
+    const bearishBar = document.getElementById('bearishBar');
+    
+    console.log('🎯 Bar elements found:', {
+        bullish: !!bullishBar,
+        neutral: !!neutralBar,
+        bearish: !!bearishBar
+    });
+    
+    // Set initial width to 0 then animate
+    if (bullishBar) bullishBar.style.width = '0%';
+    if (neutralBar) neutralBar.style.width = '0%';
+    if (bearishBar) bearishBar.style.width = '0%';
+    
+    // Animate bars with staggered timing
+    setTimeout(() => {
+        if (bullishBar) {
+            bullishBar.style.width = `${bullishPercent}%`;
+            console.log('✅ Bullish bar animated to', bullishPercent + '%');
+        }
+    }, 300);
+    
+    setTimeout(() => {
+        if (neutralBar) {
+            neutralBar.style.width = `${neutralPercent}%`;
+            console.log('✅ Neutral bar animated to', neutralPercent + '%');
+        }
+    }, 600);
+    
+    setTimeout(() => {
+        if (bearishBar) {
+            bearishBar.style.width = `${bearishPercent}%`;
+            console.log('✅ Bearish bar animated to', bearishPercent + '%');
+        }
+    }, 900);
+    
+    console.log('🎬 Bar animations scheduled');
+}
+
+// Utility function to format numbers
+function formatNumber(num) {
+    if (num >= 1000000) {
+        return (num / 1000000).toFixed(1) + 'M';
+    } else if (num >= 1000) {
+        return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toString();
+}
+
+function closeDeepAnalysis() {
+    const overlay = document.getElementById('deepAnalysisOverlay');
+    overlay.style.display = 'none';
+    
+    // Clean up charts safely
+    if (window.sentimentChart && typeof window.sentimentChart.destroy === 'function') {
+        window.sentimentChart.destroy();
+        window.sentimentChart = null;
+    }
+    if (window.focusChart && typeof window.focusChart.destroy === 'function') {
+        window.focusChart.destroy();
+        window.focusChart = null;
+    }
+}
+
+// Test function to manually show the overlay
+function testOverlay() {
+    console.log('🧪 Testing overlay display...');
+    
+    const overlayElement = document.getElementById('deepAnalysisOverlay');
+    const loadingElement = document.getElementById('analysisLoading');
+    const resultsElement = document.getElementById('analysisResults');
+    
+    console.log('📋 Elements found:', {
+        overlay: !!overlayElement,
+        loading: !!loadingElement,
+        results: !!resultsElement
+    });
+    
+    if (overlayElement) {
+        overlayElement.style.display = 'flex';
+        console.log('✅ Overlay should be visible now');
+        
+        // Test with sample data
+        setTimeout(() => {
+            if (loadingElement) loadingElement.style.display = 'none';
+            if (resultsElement) resultsElement.style.display = 'block';
+            
+            // Test with sample analysis data
+            const sampleData = {
+                tweets: ['Sample tweet 1', 'Sample tweet 2'],
+                analysis: {
+                    sentiment: { bullish: 5, bearish: 2, neutral: 3 },
+                    primaryFocus: 'memecoin',
+                    financialAdviceCount: 1,
+                    overallSentiment: 'bullish'
+                }
+            };
+            
+            updateAnalysisDisplay(sampleData);
+        }, 2000);
+    } else {
+        console.error('❌ Overlay element not found!');
+    }
+}
+
+// Make test function available globally
+window.testOverlay = testOverlay;
