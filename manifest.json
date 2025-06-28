@@ -30,6 +30,12 @@
     },
     {
       "matches": ["https://twitter.com/*", "https://x.com/*"],
+      "js": ["api-interceptor.js"],
+      "run_at": "document_start",
+      "css": []
+    },
+    {
+      "matches": ["https://twitter.com/*", "https://x.com/*"],
       "js": ["mainX.js", "content.js", "popup.js"],
       "run_at": "document_idle",
       "css": []
@@ -57,7 +63,8 @@
         "assets/minted.png",
         "assets/ignited.jpg",
         "assets/axiom.png",
-        "extension-context.txt"
+        "extension-context.txt",
+        "inject.js"
       ],
       "matches": [
         "https://axiom.trade/*",

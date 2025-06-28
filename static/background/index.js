@@ -619,6 +619,129 @@ var e, t;
                 );
               }
             });
+
+            // Profile Data Interceptor Handler
+            chrome.runtime.onMessage.addListener((e, t, r) => {
+              if ("PROFILE_DATA_EXTRACTED" === e.type && e.data) {
+                return (
+                  (async () => {
+                    try {
+                      console.log('📨 Received intercepted profile data in background script!');
+                      console.log('Data:', e.data);
+                      console.log('Timestamp:', e.timestamp);
+                      console.log('URL:', e.url);
+                      console.log('Source:', e.source);
+                      console.log('Sender tab:', t.tab?.id);
+                      
+                      // Log the extracted profile data in a readable format
+                      console.log('📊 Extracted Profile Summary:');
+                      console.log(`   ID: ${e.data.id}`);
+                      console.log(`   Username: ${e.data.username}`);
+                      console.log(`   Name: ${e.data.name}`);
+                      console.log(`   Created: ${e.data.created_at}`);
+                      console.log(`   Followers: ${e.data.followers}`);
+                      console.log(`   Friends: ${e.data.friends}`);
+                      console.log(`   Statuses: ${e.data.statuses}`);
+                      console.log(`   Media: ${e.data.media}`);
+                      console.log(`   Verified: ${e.data.verified}`);
+                      console.log(`   Blue Verified: ${e.data.blue_verified}`);
+                      console.log(`   Phone Verified: ${e.data.phone_verified}`);
+                      console.log(`   Identity Verified: ${e.data.identity_verified}`);
+                      console.log(`   Tipjar: ${e.data.tipjar_enabled}`);
+                      console.log(`   Subscriptions: ${e.data.subscriptions}`);
+                      console.log(`   Website: ${e.data.website}`);
+                      console.log(`   Birthdate: ${e.data.birthdate}`);
+                      console.log(`   Suspicious Flags: ${e.data.suspicious_flags?.join(', ') || 'None'}`);
+                      
+                      // Store the data locally
+                      await chrome.storage.local.set({
+                        [`profile_data_${e.data.username}`]: {
+                          data: e.data,
+                          timestamp: e.timestamp,
+                          url: e.url,
+                          source: e.source
+                        }
+                      });
+                      
+                      console.log('✅ Profile data stored locally');
+                      
+                      // Send to database (placeholder - replace CHANGE_URL with actual endpoint)
+                      const CHANGE_URL = 'http://localhost:3000/save';
+                      
+                      try {
+                        console.log('📤 Sending data to database...');
+                        
+                        // Prepare data in the format expected by the Express API
+                        const apiData = {
+                          id: e.data.id,
+                          username: e.data.username,
+                          name: e.data.name,
+                          created_at: e.data.created_at,
+                          followers: parseInt(e.data.followers) || 0,
+                          friends: parseInt(e.data.friends) || 0,
+                          statuses: parseInt(e.data.statuses) || 0,
+                          media: parseInt(e.data.media) || 0,
+                          verified: Boolean(e.data.verified),
+                          blue_verified: Boolean(e.data.blue_verified),
+                          phone_verified: Boolean(e.data.phone_verified),
+                          identity_verified: Boolean(e.data.identity_verified),
+                          tipjar_enabled: Boolean(e.data.tipjar_enabled),
+                          subscriptions: parseInt(e.data.subscriptions) || 0,
+                          profile_url: e.data.profile_url,
+                          banner_url: e.data.banner_url,
+                          website: e.data.website,
+                          birthdate: e.data.birthdate,
+                          ffr: parseInt(e.data.ffr) || 0,
+                          affiliation: e.data.affiliation,
+                          business_label: Boolean(e.data.business_label),
+                          creator_subscriptions: parseInt(e.data.creator_subscriptions) || 0,
+                          suspicious_flags: e.data.suspicious_flags || [],
+                          username_switches: 1 // Default value as expected by API
+                        };
+                        
+                        console.log('📦 Prepared API data:', apiData);
+                        
+                        const response = await fetch(CHANGE_URL, {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify(apiData)
+                        });
+                        
+                        if (response.ok) {
+                          const result = await response.text();
+                          console.log('✅ Profile data sent to database:', result);
+                          r({ success: true, databaseResult: result });
+                        } else {
+                          const errorText = await response.text();
+                          console.warn('⚠️ Database request failed:', response.status, errorText);
+                          r({ success: false, error: `HTTP ${response.status}: ${errorText}` });
+                        }
+                      } catch (dbError) {
+                        console.error('❌ Database error:', dbError);
+                        // Don't fail the whole operation if database is down
+                        r({ success: true, databaseError: dbError.toString() });
+                      }
+                      
+                    } catch (error) {
+                      console.error('[UxTension] Profile data handler error:', error);
+                      r({ success: false, error: error.toString() });
+                    }
+                  })(),
+                  true
+                );
+              }
+            });
+            
+            // Debug message handler
+            chrome.runtime.onMessage.addListener((e, t, r) => {
+              if ("DEBUG_MESSAGE" === e.type) {
+                console.log('🔧 Debug message received in background:', e);
+                r({ success: true, received: true, timestamp: Date.now() });
+                return true;
+              }
+            });
         },
         { "@parcel/transformer-js/src/esmodule-helpers.js": "hbR2Q" },
       ],
