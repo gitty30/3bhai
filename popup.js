@@ -1,3 +1,47 @@
+// --- PnL and Wallet Address Mapping ---
+const PNL_DATA = {
+  'vibed333': {
+    walletAddress: 'BCagckXeMChUKrHEd6fKFA1uiWDtcmCXMsqaheLiUPJd',
+    pnl: 211044,
+    isPositive: true
+  },
+  'pandoraflips': {
+    walletAddress: 'UxuuMeyX2pZPHmGZ2w3Q8MysvExCAquMtvEfqp2etvm',
+    pnl: 134506,
+    isPositive: true
+  },
+  'jijo_exe': {
+    walletAddress: '4BdKaxN8G6ka4GYtQQWk4G4dZRUTX2vQH9GcXdBREFUk',
+    pnl: 102093,
+    isPositive: true
+  },
+  'Latuche95': {
+    walletAddress: 'GJA1HEbxGnqBhBifH9uQauzXSB53to5rhDrzmKxhSU65',
+    pnl: 98750,
+    isPositive: true
+  },
+  'Nosa1x': {
+    walletAddress: 'GJA1HEbxGnqBhBifH9uQauzXSB53to5rhDrzmKxhSU65',
+    pnl: 84168,
+    isPositive: true
+  },
+  'traderpow': {
+    walletAddress: '8zFZHuSRuDpuAR7J6FzwyF3vKNx4CVW3DFHJerQhc7Zd',
+    pnl: -133854,
+    isPositive: false
+  },
+  'CookerFlips': {
+    walletAddress: '8deJ9xeUvXSJwicYptA9mHsU2rN2pDx37KWzkDkEXhU6',
+    pnl: -121486,
+    isPositive: false
+  },
+  'gorillacapsol': {
+    walletAddress: 'DpNVrtA3ERfKzX4F8Pi2CVykdJJjoNxyY5QgoytAwD26',
+    pnl: -105312,
+    isPositive: false
+  }
+};
+
 // --- Utility: Scrape the username from the current page (Twitter/Solana wallet, etc) ---
 window.addEventListener('DOMContentLoaded', function() {
   chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
@@ -41,18 +85,10 @@ window.addEventListener('DOMContentLoaded', function() {
   document.getElementById('activityScore').textContent = profileData.activityScore + '/10';
   document.getElementById('followers').textContent = profileData.followers;
 
-  // Animate wallet address with typewriter effect
-  setTimeout(() => {
-    animateWalletAddress();
-  }, 1000);
-
-  // Update PnL display
-  updatePnL(profileData.pnl);
-
-  // Hide PnL section if no wallet data (simulate)
-  if (Math.random() < 0.3) {
-    document.getElementById('pnlSection').style.display = 'none';
-  }
+  // PnL will be updated automatically when profile data is received from content script
+  
+  // Set up URL change detection for dynamic PnL updates
+  setupUrlChangeDetection();
 });
 
 // --- Utility: Observe URL changes using MutationObserver (for SPA navigation) ---
@@ -100,38 +136,6 @@ function statsScrapper(walletAddress) {
     wallet: walletAddress,
     stats: {}, // Fill with real stats
   };
-}
-
-// Typewriter effect for wallet address
-function typewriterEffect(element, text, speed = 100) {
-  element.textContent = '';
-  element.classList.add('typing');
-  
-  let i = 0;
-  const timer = setInterval(() => {
-    element.textContent += text.charAt(i);
-    i++;
-    
-    if (i >= text.length) {
-      clearInterval(timer);
-      element.classList.remove('typing');
-      // Add train effect after typing is done
-      setTimeout(() => {
-        element.classList.add('train-effect');
-        setTimeout(() => {
-          element.classList.remove('train-effect');
-        }, 3000);
-      }, 500);
-    }
-  }, speed);
-}
-
-// Enhanced wallet address effect
-function animateWalletAddress() {
-  const walletElement = document.getElementById('walletAddress');
-  const fullAddress = profileData.walletAddress + '...';
-  
-  typewriterEffect(walletElement, fullAddress, 80);
 }
 
 // Theme management
@@ -239,21 +243,130 @@ function updateRiskLevel(changes) {
   }
 }
 
-function updatePnL(value) {
+// Function to format wallet address (first 5 digits + 7 asterisks + last 4 digits)
+function formatWalletAddress(address) {
+  if (!address || address === 'Nil') return 'Nil';
+  if (address.length <= 9) return address; // If too short, return as is
+  
+  const firstFive = address.substring(0, 5);
+  const lastFour = address.substring(address.length - 4);
+  
+  return `${firstFive}*******${lastFour}`;
+}
+
+// Function to copy text to clipboard
+function copyToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text);
+  } else {
+    // Fallback for older browsers
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.top = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      document.execCommand('copy');
+      textArea.remove();
+      return Promise.resolve();
+    } catch (err) {
+      textArea.remove();
+      return Promise.reject(err);
+    }
+  }
+}
+
+// Function to create copy icon SVG
+function createCopyIcon() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="copy-icon" style="cursor: pointer; margin-left: 8px; opacity: 0.7; transition: opacity 0.3s ease;">
+    <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
+    <path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+    <path d="M16 4h2a2 2 0 0 1 2 2v4"/>
+    <path d="M21 14H11"/>
+    <path d="m15 10-4 4 4 4"/>
+  </svg>`;
+}
+
+// Function to update PnL for a specific username
+function updatePnLForUsername(username) {
   const pnlElement = document.getElementById('pnlValue');
   const pnlSection = document.getElementById('pnlSection');
+  const walletElement = document.getElementById('walletAddress');
   
-  if (pnlElement && pnlSection) {
-    const formattedValue = value >= 0 ? `+$${value.toFixed(2)}` : `-$${Math.abs(value).toFixed(2)}`;
+  if (!pnlElement || !pnlSection || !walletElement) return;
+  
+  const userData = PNL_DATA[username];
+  
+  // Debug logging
+  console.log('[POPUP] Updating PnL for username:', username);
+  console.log('[POPUP] User data found:', !!userData);
+  
+  if (userData) {
+    // User found in mapping
+    const formattedValue = userData.isPositive ? 
+      `+$${userData.pnl.toLocaleString()}` : 
+      `-$${Math.abs(userData.pnl).toLocaleString()}`;
+    
     pnlElement.textContent = formattedValue;
     
-    if (value >= 0) {
+    if (userData.isPositive) {
       pnlElement.classList.remove('pnl-negative');
       pnlSection.className = 'alert-box alert-success pnl-section';
     } else {
       pnlElement.classList.add('pnl-negative');
       pnlSection.className = 'alert-box alert-danger pnl-section';
     }
+    
+    // Update wallet address with copy functionality
+    const formattedAddress = formatWalletAddress(userData.walletAddress);
+    walletElement.innerHTML = `
+      <span class="wallet-text">${formattedAddress}</span>
+      ${createCopyIcon()}
+    `;
+    
+    // Add click event for copy functionality
+    const copyIcon = walletElement.querySelector('.copy-icon');
+    if (copyIcon) {
+      copyIcon.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try {
+          await copyToClipboard(userData.walletAddress);
+          
+          // Visual feedback
+          copyIcon.style.opacity = '1';
+          copyIcon.style.transform = 'scale(1.2)';
+          copyIcon.style.transition = 'all 0.2s ease';
+          
+          setTimeout(() => {
+            copyIcon.style.opacity = '0.7';
+            copyIcon.style.transform = 'scale(1)';
+          }, 500);
+          
+        } catch (err) {
+          console.warn('[POPUP] Failed to copy wallet address:', err);
+        }
+      });
+    }
+    
+    // Show PnL section
+    pnlSection.style.display = 'block';
+    
+  } else {
+    // User not found in mapping
+    pnlElement.textContent = 'N/A';
+    pnlElement.classList.remove('pnl-negative');
+    pnlSection.className = 'alert-box alert-success pnl-section';
+    
+    // Set wallet address to Nil
+    walletElement.innerHTML = `
+      <span class="wallet-text">Nil</span>
+    `;
+    
+    // Show PnL section even for unknown users
+    pnlSection.style.display = 'block';
   }
 }
 
@@ -289,6 +402,13 @@ function updateProfileUI(data, fallback) {
   // Username Changes Array
   if (data.usernameChangesArray) {
     updateIdentitySwitches(data.usernameChangesArray);
+  }
+  
+  // Update PnL based on username from data
+  const currentUsername = data.currentUsername || data.username;
+  if (currentUsername) {
+    console.log('[POPUP] Updating PnL for username:', currentUsername);
+    updatePnLForUsername(currentUsername);
   }
   
   // Verification
@@ -932,3 +1052,81 @@ function testOverlay() {
 
 // Make test function available globally
 window.testOverlay = testOverlay;
+
+// Function to set up URL change detection
+function setupUrlChangeDetection() {
+  // The PnL will be updated automatically when the profile data changes
+  // through the existing message passing system, so we don't need complex URL monitoring
+  console.log('[POPUP] PnL will be updated automatically with profile data changes');
+}
+
+// Function to refresh PnL data (can be called manually)
+function refreshPnLData() {
+  // This will be handled automatically through the profile data system
+  console.log('[POPUP] PnL refresh requested - will be handled by profile data updates');
+}
+
+// Test function to verify PnL functionality
+function testPnLFunctionality() {
+  console.log('[POPUP] Testing PnL functionality...');
+  
+  // Test with known users
+  const testUsers = ['vibed333', 'traderpow', 'unknown_user'];
+  
+  testUsers.forEach((username, index) => {
+    setTimeout(() => {
+      console.log(`[POPUP] Testing with username: ${username}`);
+      updatePnLForUsername(username);
+    }, index * 2000);
+  });
+}
+
+// Make test functions available globally
+window.testPnLFunctionality = testPnLFunctionality;
+window.refreshPnLData = refreshPnLData;
+
+// Simple test function for immediate testing
+window.testPnLWithUser = function(username) {
+  console.log(`[POPUP] Testing PnL with user: ${username}`);
+  const userData = PNL_DATA[username];
+  console.log('[POPUP] User data:', userData);
+  
+  if (userData) {
+    console.log(`[POPUP] Should show: ${userData.isPositive ? '+' : '-'}$${Math.abs(userData.pnl).toLocaleString()}`);
+    console.log(`[POPUP] Wallet: ${formatWalletAddress(userData.walletAddress)}`);
+  } else {
+    console.log('[POPUP] Should show: N/A and Nil');
+  }
+  
+  // Update PnL for the username
+  updatePnLForUsername(username);
+};
+
+// Test function to verify content script communication
+window.testContentScriptCommunication = async function() {
+  console.log('[POPUP] Testing content script communication...');
+  
+  try {
+    const tabs = await safeTabsQuery({ active: true, currentWindow: true });
+    if (tabs.length > 0) {
+      console.log('[POPUP] Current tab:', tabs[0].url);
+      
+      const response = await safeTabsSendMessage(tabs[0].id, { action: 'get_profile_data' });
+      console.log('[POPUP] Content script response:', response);
+      
+      if (response && response.currentUsername) {
+        console.log('[POPUP] Username from content script:', response.currentUsername);
+        return response.currentUsername;
+      } else {
+        console.log('[POPUP] No username in response');
+        return null;
+      }
+    } else {
+      console.log('[POPUP] No active tabs found');
+      return null;
+    }
+  } catch (err) {
+    console.error('[POPUP] Error testing content script communication:', err);
+    return null;
+  }
+};

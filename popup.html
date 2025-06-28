@@ -278,6 +278,28 @@
  color: #6b7280;
  font-family: 'Courier New', monospace;
  margin-top: 4px;
+ display: flex;
+ align-items: center;
+ }
+
+ .wallet-text {
+ font-family: 'Courier New', monospace;
+ }
+
+ .copy-icon {
+ cursor: pointer;
+ margin-left: 8px;
+ opacity: 0.7;
+ transition: all 0.3s ease;
+ }
+
+ .copy-icon:hover {
+ opacity: 1;
+ transform: scale(1.1);
+ }
+
+ .copy-icon:active {
+ transform: scale(0.95);
  }
 
  .section-title {
@@ -1010,10 +1032,10 @@
 
  <!-- PnL Section -->
  <div id="pnlSection" class="alert-box alert-success pnl-section">
- <div class="pnl-title">Portfolio Status</div>
- <div id="pnlValue" class="pnl-value">+$2,847.32</div>
+ <div class="pnl-title">PNL</div>
+ <div id="pnlValue" class="pnl-value">Loading...</div>
  <div class="wallet-address" id="walletAddress">
- 0x742d35Cc6634C0532925a3b8D4068...
+   <span class="wallet-text">Loading...</span>
  </div>
  </div>
  </div>

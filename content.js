@@ -311,7 +311,16 @@ injectInterceptorScript();
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     try {
         if (message.action === "get_profile_data") {
-            sendResponse(window.__lastProfileData || {});
+            // Extract current username from URL
+            const currentUsername = extractUsernameFromUrl();
+            
+            const responseData = {
+                ...(window.__lastProfileData || {}),
+                currentUsername: currentUsername
+            };
+            
+            console.log('[CONTENT] Sending profile data with username:', currentUsername);
+            sendResponse(responseData);
         } else if (message.action === "get_api_profile_data") {
             // Return API profile data if available
             sendResponse(window.__lastApiProfileData || {});
@@ -342,6 +351,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({});
     }
 });
+
+// Function to extract username from current URL
+function extractUsernameFromUrl() {
+    try {
+        const url = window.location.href;
+        const match = url.match(/x\.com\/([A-Za-z0-9_]+)/);
+        const username = match ? match[1] : null;
+        console.log('[CONTENT] Extracted username from URL:', username);
+        return username;
+    } catch (e) {
+        console.warn('[CONTENT] Error extracting username from URL:', e.message);
+        return null;
+    }
+}
 
 // Cleanup on page unload
 window.addEventListener('unload', () => {
