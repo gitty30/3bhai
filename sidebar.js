@@ -367,7 +367,13 @@ function addMessage(text, type) {
 	const chatMessages = document.getElementById('chatMessages');
 	const messageDiv = document.createElement('div');
 	messageDiv.className = `message ${type}`;
-	messageDiv.textContent = text;
+	
+	// For AI messages, render HTML formatting
+	if (type === 'ai') {
+		messageDiv.innerHTML = text;
+	} else {
+		messageDiv.textContent = text;
+	}
 
 	chatMessages.appendChild(messageDiv);
 	chatMessages.scrollTop = chatMessages.scrollHeight;

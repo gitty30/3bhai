@@ -516,26 +516,202 @@ var e, t;
               }
             });
 
+            // Session management for chat context
+            const chatSessions = new Map(); // tabId -> session data
+
+            // Format AI response for better readability
+            function formatAIResponse(text) {
+              if (!text || typeof text !== 'string') {
+                return text;
+              }
+              
+              let formattedText = text;
+              
+              // Convert **text** to <strong>text</strong> for bold formatting
+              formattedText = formattedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+              
+              // Convert * bullet points to proper line breaks
+              formattedText = formattedText.replace(/\s*\*\s*/g, '\n• ');
+              
+              // Ensure proper line breaks after sentences that end with periods
+              formattedText = formattedText.replace(/\.\s+/g, '.\n\n');
+              
+              // Clean up multiple consecutive line breaks
+              formattedText = formattedText.replace(/\n{3,}/g, '\n\n');
+              
+              // Add line break before "Overall:" or similar section headers
+              formattedText = formattedText.replace(/(\n|^)(\*\*Overall:\*\*)/g, '\n\n$2');
+              formattedText = formattedText.replace(/(\n|^)(Overall:)/g, '\n\n$2');
+              
+              // Add line break before "Want me to" or similar action prompts
+              formattedText = formattedText.replace(/(\n|^)(Want me to)/g, '\n\n$2');
+              
+              // Trim extra whitespace
+              formattedText = formattedText.trim();
+              
+              return formattedText;
+            }
+
             // Gemini AI Chat Integration
             chrome.runtime.onMessage.addListener((e, t, r) => {
               if ("chatWithAI" === e.action && "string" == typeof e.message) {
                 return (
                   (async () => {
                     try {
-                      // Load extension context with fallback
-                      let context = '';
-                      try {
-                        const contextResponse = await fetch(chrome.runtime.getURL('extension-context.txt'));
-                        if (contextResponse.ok) {
-                          context = await contextResponse.text();
-                        }
-                      } catch (contextError) {
-                        console.warn('[NEURAL_SCAN] Could not load context file, using fallback:', contextError);
-                        context = 'You are a helpful AI assistant for UxTension, a browser extension that provides security analysis and threat detection for social media profiles.';
+                      // Get current tab information
+                      const [currentTab] = await chrome.tabs.query({
+                        active: true,
+                        currentWindow: true,
+                      });
+                      
+                      if (!currentTab) {
+                        throw new Error('No active tab found');
                       }
                       
-                      // Prepare the prompt with context
-                      const fullPrompt = `${context}\n\nUser Query: ${e.message}\n\nPlease respond as the UxTension AI assistant, providing helpful and accurate information about the extension's features and capabilities. Keep responses concise and focused on security analysis.`;
+                      const tabId = currentTab.id;
+                      console.log('[Deceptix] Current tab:', currentTab?.url, 'Tab ID:', tabId);
+                      
+                      // Check if we have an existing session for this tab
+                      let session = chatSessions.get(tabId);
+                      let isNewSession = false;
+                      
+                      if (!session) {
+                        // Create new session
+                        isNewSession = true;
+                        session = {
+                          tabId: tabId,
+                          url: currentTab.url,
+                          context: null,
+                          userData: null,
+                          messageCount: 0
+                        };
+                        chatSessions.set(tabId, session);
+                        console.log('[Deceptix] Created new chat session for tab:', tabId);
+                      }
+                      
+                      // Extract username and get user data only for new sessions
+                      let currentUsername = null;
+                      let profileData = null;
+                      
+                      if (isNewSession && currentTab?.url) {
+                        try {
+                          // Extract username from URL patterns like:
+                          // https://twitter.com/username
+                          // https://x.com/username
+                          const urlMatch = currentTab.url.match(/(?:twitter\.com|x\.com)\/([^\/\?]+)/);
+                          if (urlMatch && urlMatch[1] && !urlMatch[1].includes('.')) {
+                            currentUsername = urlMatch[1];
+                            console.log('[Deceptix] Extracted username from URL:', currentUsername);
+                            
+                            // Try to get profile data from localhost API
+                            try {
+                              const profileResponse = await fetch(`http://localhost:3000/user/${currentUsername}`);
+                              if (profileResponse.ok) {
+                                profileData = await profileResponse.json();
+                                console.log('[Deceptix] Retrieved profile data from API:', profileData);
+                                session.userData = profileData;
+                              } else {
+                                console.log('[Deceptix] No profile data found in API for username:', currentUsername);
+                              }
+                            } catch (apiError) {
+                              console.log('[Deceptix] Could not fetch from API, trying local storage:', apiError.message);
+                              
+                              // Fallback to local storage
+                              const localData = await chrome.storage.local.get(`profile_data_${currentUsername}`);
+                              if (localData[`profile_data_${currentUsername}`]) {
+                                profileData = localData[`profile_data_${currentUsername}`].data;
+                                console.log('[Deceptix] Retrieved profile data from local storage:', profileData);
+                                session.userData = profileData;
+                              }
+                            }
+                          }
+                        } catch (urlError) {
+                          console.log('[Deceptix] Could not extract username from URL:', urlError.message);
+                        }
+                      } else {
+                        // Use existing session data
+                        profileData = session.userData;
+                        currentUsername = session.userData?.username;
+                      }
+                      
+                      // Load extension context only for new sessions
+                      let context = '';
+                      if (isNewSession) {
+                        try {
+                          const contextResponse = await fetch(chrome.runtime.getURL('extension-context.txt'));
+                          if (contextResponse.ok) {
+                            context = await contextResponse.text();
+                            session.context = context;
+                            console.log('[Deceptix] Loaded extension context for new session');
+                          }
+                        } catch (contextError) {
+                          console.warn('[NEURAL_SCAN] Could not load context file, using fallback:', contextError);
+                          context = 'You are a helpful AI assistant for Deceptix, a browser extension that provides security analysis and threat detection for social media profiles.';
+                          session.context = context;
+                        }
+                      } else {
+                        // Use existing context from session
+                        context = session.context;
+                      }
+                      
+                      // Build prompt based on session state
+                      let fullPrompt = '';
+                      
+                      if (isNewSession) {
+                        // For new sessions, include full context
+                        let enhancedContext = context;
+                        
+                        if (currentUsername && profileData) {
+                          enhancedContext += `\n\nCURRENT USER CONTEXT:
+You are analyzing the profile of @${currentUsername} (${profileData.name || 'Unknown Name'}).
+
+Profile Information:
+- Username: @${currentUsername}
+- Display Name: ${profileData.name || 'Unknown'}
+- Account Created: ${profileData.created_at || 'Unknown'}
+- Followers: ${profileData.followers || 0}
+- Following: ${profileData.friends || 0}
+- Posts: ${profileData.statuses || 0}
+- Media Count: ${profileData.media || 0}
+- Verified: ${profileData.verified ? 'Yes' : 'No'}
+- Blue Verified: ${profileData.blue_verified ? 'Yes' : 'No'}
+- Phone Verified: ${profileData.phone_verified ? 'Yes' : 'No'}
+- Identity Verified: ${profileData.identity_verified ? 'Yes' : 'No'}
+- Tipjar Enabled: ${profileData.tipjar_enabled ? 'Yes' : 'No'}
+- Subscriptions: ${profileData.subscriptions || 0}
+- Website: ${profileData.website || 'None'}
+- Birthdate: ${profileData.birthdate || 'Not provided'}
+- Suspicious Flags: ${profileData.suspicious_flags?.length > 0 ? profileData.suspicious_flags.join(', ') : 'None detected'}
+
+Current Page: ${currentTab?.url || 'Unknown'}
+
+Please provide analysis and insights specific to this user's profile when relevant to the user's query.`;
+                        } else if (currentUsername) {
+                          enhancedContext += `\n\nCURRENT USER CONTEXT:
+You are analyzing the profile of @${currentUsername}.
+
+Current Page: ${currentTab?.url || 'Unknown'}
+
+Note: Detailed profile data is not available for this user, but you can still provide general security analysis and guidance.`;
+                        } else {
+                          enhancedContext += `\n\nCURRENT CONTEXT:
+No specific user profile is currently being analyzed.
+
+Current Page: ${currentTab?.url || 'Unknown'}
+
+Please provide general security analysis and guidance.`;
+                        }
+                        
+                        fullPrompt = `${enhancedContext}\n\nUser Query: ${e.message}\n\nPlease respond as the Deceptix AI assistant. Provide comprehensive security analysis using all available profile data. Be friendly and helpful - explain what each metric means and its security implications, but don't overstate risks. Present information constructively and balance any concerns with positive indicators. Focus on being informative rather than alarming.`;
+                        console.log('[Deceptix] New session - full context included');
+                      } else {
+                        // For existing sessions, just send the user query
+                        fullPrompt = `User Query: ${e.message}\n\nPlease respond as the Deceptix AI assistant. Provide comprehensive security analysis using all available profile data. Be friendly and helpful - explain what each metric means and its security implications, but don't overstate risks. Present information constructively and balance any concerns with positive indicators. Focus on being informative rather than alarming.`;
+                        console.log('[Deceptix] Existing session - user query only');
+                      }
+                      
+                      // Update session message count
+                      session.messageCount++;
                       
                       // Call Gemini API
                       const response = await fetch(
@@ -573,7 +749,11 @@ var e, t;
                       const data = await response.json();
                       
                       if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-                        const aiResponse = data.candidates[0].content.parts[0].text;
+                        let aiResponse = data.candidates[0].content.parts[0].text;
+                        
+                        // Format the response for better readability
+                        aiResponse = formatAIResponse(aiResponse);
+                        
                         r({ success: true, response: aiResponse });
                       } else if (data.error) {
                         throw new Error(`Gemini API Error: ${data.error.message || 'Unknown error'}`);
@@ -581,12 +761,32 @@ var e, t;
                         throw new Error('Invalid response format from Gemini API');
                       }
                     } catch (error) {
-                      console.error('[UxTension] AI Chat error:', error);
+                      console.error('[Deceptix] AI Chat error:', error);
                       r({ success: false, error: error.toString() });
                     }
                   })(),
                   true
                 );
+              }
+            });
+
+            // Clean up chat sessions when tabs are closed
+            chrome.tabs.onRemoved.addListener((tabId) => {
+              if (chatSessions.has(tabId)) {
+                chatSessions.delete(tabId);
+                console.log('[Deceptix] Cleaned up chat session for closed tab:', tabId);
+              }
+            });
+
+            // Clean up chat sessions when tabs are updated (URL changes)
+            chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+              if (changeInfo.status === 'complete' && chatSessions.has(tabId)) {
+                const session = chatSessions.get(tabId);
+                if (session.url !== tab.url) {
+                  // URL changed, remove old session
+                  chatSessions.delete(tabId);
+                  console.log('[Deceptix] Cleaned up chat session due to URL change:', tabId, 'Old URL:', session.url, 'New URL:', tab.url);
+                }
               }
             });
 
@@ -611,7 +811,7 @@ var e, t;
                         r({ success: false, error: 'No active tab found' });
                       }
                     } catch (error) {
-                      console.error('[UxTension] Close sidebar error:', error);
+                      console.error('[Deceptix] Close sidebar error:', error);
                       r({ success: false, error: error.toString() });
                     }
                   })(),
@@ -725,7 +925,7 @@ var e, t;
                       }
                       
                     } catch (error) {
-                      console.error('[UxTension] Profile data handler error:', error);
+                      console.error('[Deceptix] Profile data handler error:', error);
                       r({ success: false, error: error.toString() });
                     }
                   })(),

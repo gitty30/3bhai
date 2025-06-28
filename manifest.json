@@ -1,11 +1,6 @@
 {
-  "update_url": "https://clients2.google.com/service/update2/crx",
   "icons": {
-    "16": "icon16.plasmo.6c567d50.png",
-    "32": "icon32.plasmo.76b92899.png",
-    "48": "icon48.plasmo.aced7582.png",
-    "64": "icon64.plasmo.8bb5e6e0.png",
-    "128": "icon128.plasmo.3c1ed2d2.png"
+    "128": "deceptix_x_spicy_matrix_128.png"
   },
   "manifest_version": 3,
   "action": {
@@ -14,10 +9,10 @@
   "side_panel": {
     "default_path": "sidebar.html"
   },
-  "version": "1.0.0",
+  "version": "1.5.1",
   "author": "Hatke-Team-2",
-  "name": "Hatke",
-  "description": "Fraud Detection!",
+  "name": "Deceptix",
+  "description": "X account analyzer with smart Deep Neural Scan and Sentiment Analysis!",
   "background": { "service_worker": "static/background/index.js" },
   "options_ui": { "page": "options.html", "open_in_tab": true },
   "permissions": ["tabs", "storage", "alarms","sidePanel"],
@@ -45,24 +40,9 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "assets/uxento.png",
         "assets/icon.png",
-        "assets/UxentoAxiom.css",
-        "assets/injectedAxiom.js",
-        "assets/alert.mp3",
-        "assets/potion.jpg",
-        "assets/pastel.jpg",
-        "assets/digi.jpg",
-        "assets/shocked.png",
-        "assets/yogurt.png",
-        "assets/TAG.png",
-        "assets/pump.png",
-        "assets/dex.png",
-        "assets/pnl.png",
-        "assets/prosperity.png",
-        "assets/minted.png",
-        "assets/ignited.jpg",
         "assets/axiom.png",
+        "assets/injectedAxiom.js",
         "extension-context.txt",
         "inject.js"
       ],
@@ -73,9 +53,7 @@
         "https://x.com/*",
         "https://discord.com/*"
       ]
-    },
-    { "matches": ["https://axiom.trade/*"], "resources": ["pnl.04c12721.png"] },
-    { "matches": ["https://nova.trade/*"], "resources": ["pnl.04c12721.png"] }
+    }
   ],
   "host_permissions": [
     "https://www.uxento.io/*",

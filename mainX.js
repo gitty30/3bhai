@@ -302,7 +302,7 @@ var e, t;
                     }),
                     n.addEventListener("click", () => e.remove());
                   let r = document.createElement("h2");
-                  (r.textContent = "Uxtension Alpha"),
+                  (r.textContent = "Deceptix"),
                     Object.assign(r.style, {
                       margin: "0 0 12px",
                       fontSize: "20px",

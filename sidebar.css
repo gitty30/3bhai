@@ -232,6 +232,21 @@ body {
 	color: var(--text-primary);
 	border: 1px solid var(--card-border);
 	border-bottom-left-radius: 4px;
+	white-space: pre-line;
+}
+
+.message.ai strong {
+	color: var(--cyber-blue);
+	font-weight: 600;
+}
+
+.message.ai ul {
+	margin: 4px 0;
+	padding-left: 16px;
+}
+
+.message.ai li {
+	margin: 2px 0;
 }
 
 .message.system {
