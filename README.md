@@ -1,4 +1,4 @@
-# 🚀 DeceptiX - Advanced Threat Detection Extension
+# 🚀 DeceptiX - Advanced Threat Detection Extension for X profiles! Crypto Magic
 
 A powerful browser extension for advanced threat detection and profile analysis with a sleek, modern interface featuring multiple funky color themes.
 
