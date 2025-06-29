@@ -294,6 +294,7 @@ function updateIdentitySwitches(usernameChangesArray) {
   const changesCount = usernameChangesArray ? usernameChangesArray.length : 0;
   const changesElement = document.getElementById('usernameChanges');
   const descElement = document.querySelector('.alert-desc');
+  const alertBox = document.querySelector('.alert-box.alert-danger'); // Get the alert box
   
   // Update the count display
   if (changesElement) {
@@ -304,16 +305,37 @@ function updateIdentitySwitches(usernameChangesArray) {
     }
   }
   
-  // Update the description based on count
+  // Update the description based on count with color coding
   if (descElement) {
     if (changesCount === 0 && (!usernameChangesArray || usernameChangesArray.length === 0)) {
       descElement.textContent = 'Loading username history...';
+      descElement.style.color = '#9ca3af'; // Default gray
     } else if (changesCount < 3) {
       descElement.textContent = 'Not much for a Scammer!';
+      descElement.style.color = '#10b981'; // Green for low risk
     } else if (changesCount >= 3 && changesCount <= 5) {
       descElement.textContent = 'Hmmm. Suspicious!';
+      descElement.style.color = '#f59e0b'; // Yellow/Orange for medium risk
     } else {
       descElement.textContent = 'Multiple aliases detected - High scam probability';
+      descElement.style.color = '#ef4444'; // Red for high risk
+    }
+  }
+  
+  // Update alert box background color based on risk level
+  if (alertBox) {
+    if (changesCount === 0 && (!usernameChangesArray || usernameChangesArray.length === 0)) {
+      // Keep default styling for loading state
+      alertBox.className = 'alert-box alert-danger';
+    } else if (changesCount < 3) {
+      // Green background for low risk
+      alertBox.className = 'alert-box alert-success';
+    } else if (changesCount >= 3 && changesCount <= 5) {
+      // Yellow/Orange background for medium risk
+      alertBox.className = 'alert-box alert-warning';
+    } else {
+      // Red background for high risk
+      alertBox.className = 'alert-box alert-danger';
     }
   }
   

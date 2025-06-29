@@ -370,7 +370,9 @@ function addMessage(text, type) {
 	
 	// For AI messages, render HTML formatting
 	if (type === 'ai') {
-		messageDiv.innerHTML = text;
+		// Convert line breaks to HTML br tags for proper display
+		const formattedText = text.replace(/\n/g, '<br>');
+		messageDiv.innerHTML = formattedText;
 	} else {
 		messageDiv.textContent = text;
 	}

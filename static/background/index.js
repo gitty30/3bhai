@@ -530,8 +530,14 @@ var e, t;
               // Convert **text** to <strong>text</strong> for bold formatting
               formattedText = formattedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
               
-              // Convert * bullet points to proper line breaks
-              formattedText = formattedText.replace(/\s*\*\s*/g, '\n• ');
+              // Handle bullet points with • symbols - ensure they start on new lines
+              formattedText = formattedText.replace(/([^•\n])\s*•\s*/g, '$1\n\n• ');
+              
+              // Also handle bullet points that might already be at the start of lines
+              formattedText = formattedText.replace(/(\n|^)\s*•\s*/g, '\n\n• ');
+              
+              // Convert * bullet points to proper line breaks (fallback)
+              formattedText = formattedText.replace(/\s*\*\s*/g, '\n\n• ');
               
               // Ensure proper line breaks after sentences that end with periods
               formattedText = formattedText.replace(/\.\s+/g, '.\n\n');
@@ -545,6 +551,14 @@ var e, t;
               
               // Add line break before "Want me to" or similar action prompts
               formattedText = formattedText.replace(/(\n|^)(Want me to)/g, '\n\n$2');
+              
+              // Add line break before "Recommendation:" or similar section headers
+              formattedText = formattedText.replace(/(\n|^)(\*\*Recommendation:\*\*)/g, '\n\n$2');
+              formattedText = formattedText.replace(/(\n|^)(Recommendation:)/g, '\n\n$2');
+              
+              // Add line break before "Deceptix Neural Scan Summary:" or similar
+              formattedText = formattedText.replace(/(\n|^)(\*\*Deceptix Neural Scan Summary:\*\*)/g, '\n\n$2');
+              formattedText = formattedText.replace(/(\n|^)(Deceptix Neural Scan Summary:)/g, '\n\n$2');
               
               // Trim extra whitespace
               formattedText = formattedText.trim();
