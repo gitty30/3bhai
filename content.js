@@ -414,9 +414,19 @@ window.testApiInterceptor = function() {
     }
     
     // Try to manually trigger a fetch call to see if it's intercepted
-    const testUrl = 'https://api.x.com/graphql/jUKA--0QkqGIFhmfRZdWrQ/UserByScreenName?variables=%7B%22screen_name%22%3A%22elonmusk%22%7D';
+    // Test both external and internal API patterns
+    const testUrls = [
+        'https://api.x.com/graphql/jUKA--0QkqGIFhmfRZdWrQ/UserByScreenName?variables=%7B%22screen_name%22%3A%22elonmusk%22%7D',
+        'https://x.com/i/api/graphql/jUKA--0QkqGIFhmfRZdWrQ/UserByScreenName?variables=%7B%22screen_name%22%3A%22elonmusk%22%7D'
+    ];
     
-    console.log('🔍 Testing fetch interception with:', testUrl);
+    console.log('🔍 Testing fetch interception with both URL patterns:');
+    testUrls.forEach((testUrl, index) => {
+        console.log(`  ${index + 1}. ${testUrl}`);
+    });
+    
+    // Test the internal API pattern (more likely to work when logged in)
+    const testUrl = testUrls[1]; // Use the internal API pattern
     
     fetch(testUrl, {
         method: 'GET',
@@ -441,6 +451,7 @@ window.testApiInterceptor = function() {
         const resources = window.performance.getEntriesByType('resource');
         const apiCalls = resources.filter(r => 
             r.name.includes('api.x.com') || 
+            r.name.includes('x.com/i/api') ||
             r.name.includes('api.twitter.com') ||
             r.name.includes('graphql')
         );
@@ -465,7 +476,11 @@ window.debugInterceptorState = function() {
         const resources = window.performance.getEntriesByType('resource');
         console.log('Total network requests:', resources.length);
         
-        const graphqlCalls = resources.filter(r => r.name.includes('graphql'));
+        const graphqlCalls = resources.filter(r => 
+            r.name.includes('graphql') || 
+            r.name.includes('x.com/i/api') ||
+            r.name.includes('api.x.com')
+        );
         console.log('GraphQL calls:', graphqlCalls);
     }
 };
@@ -612,99 +627,97 @@ window.testDataExtraction = function() {
 // Tweet Analysis Functionality
 async function extractTweetsWithScrolling() {
     const tweets = new Set();
+    const walletMap = new Map();
     const processedElements = new Set();
-    let previousHeight = document.body.scrollHeight;
-    let scrollCount = 0;
-    const maxScrolls = 1; // Increased to collect more tweets
-    let noNewContentCount = 0;
-    const maxNoNewContent = 3;
+    
+    // Quick exit conditions
+    const QUICK_EXIT = {
+        noNewTweetsTimeout: 3000,
+        minTweetsForQuickExit: 2,
+        sameHeightIterations: 2
+    };
 
-    console.log('🔄 Starting tweet extraction with scrolling...');
+    let lastNewTweetTime = Date.now();
+    let sameHeightCount = 0;
+    let lastHeight = document.body.scrollHeight;
 
+    // Simple tweet extraction
     function extractTweetsFromCurrentView() {
-        const tweetArticles = document.querySelectorAll('article[role="article"]');
-        console.log(`📝 Found ${tweetArticles.length} tweet articles`);
-
+        const tweetArticles = document.querySelectorAll('.css-175oi2r article[role="article"]');
         let newTweetsCount = 0;
-        tweetArticles.forEach((article, index) => {
+
+        tweetArticles.forEach((article) => {
             if (processedElements.has(article)) return;
-
+            
             const tweetContent = article.innerText || '';
-            const trimmedContent = tweetContent.trim();
-
-            if (trimmedContent && trimmedContent.length > 10) {
-                if (!tweets.has(trimmedContent)) {
-                    tweets.add(trimmedContent);
-                    newTweetsCount++;
-                    console.log(`📄 New tweet ${index + 1}: ${trimmedContent.substring(0, 80)}...`);
-                }
+            if (!tweets.has(tweetContent) && tweetContent.trim().length > 10) {
+                tweets.add(tweetContent);
+                newTweetsCount++;
+                lastNewTweetTime = Date.now();
             }
-
             processedElements.add(article);
         });
 
         return newTweetsCount;
     }
 
-    // Initial load
-    console.log('📖 Extracting initially visible tweets...');
-    const initialTweets = extractTweetsFromCurrentView();
-    console.log(`📊 Initially visible tweets extracted: ${initialTweets}`);
+    // Initial extraction
+    console.log('📜 Starting tweet extraction...');
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    extractTweetsFromCurrentView();
 
-    // Scroll loop
-    while (scrollCount < maxScrolls && noNewContentCount < maxNoNewContent) {
-        console.log(`🔄 Scroll attempt ${scrollCount + 1}/${maxScrolls}`);
-
-        const currentScrollY = window.scrollY;
-
-        // Smooth stepped scrolling to bottom
-        const scrollStep = 400;
-        const maxStepScrolls = Math.ceil((document.body.scrollHeight - currentScrollY) / scrollStep);
-
-        for (let i = 0; i < maxStepScrolls; i++) {
-            window.scrollBy(0, scrollStep);
-            await new Promise(resolve => setTimeout(resolve, 300));
+    // Scroll and extract
+    while (true) {
+        // Check exit conditions
+        const timeSinceLastTweet = Date.now() - lastNewTweetTime;
+        if (timeSinceLastTweet > QUICK_EXIT.noNewTweetsTimeout && 
+            tweets.size >= QUICK_EXIT.minTweetsForQuickExit) {
+            console.log('⏰ No new tweets timeout - stopping');
+            break;
         }
 
-        // Wait after full scroll
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Scroll
+        window.scrollTo({
+            top: document.body.scrollHeight,
+            behavior: 'smooth'
+        });
 
-        const newHeight = document.body.scrollHeight;
-        const newScrollY = window.scrollY;
-
-        if (newHeight === previousHeight && newScrollY === currentScrollY) {
-            noNewContentCount++;
-            console.log(`⚠️ No new content detected (${noNewContentCount}/${maxNoNewContent})`);
-        } else {
-            noNewContentCount = 0;
-            console.log(`✅ New content loaded. Height: ${newHeight}, Scroll: ${newScrollY}`);
-
-            const newTweets = extractTweetsFromCurrentView();
-            console.log(`📝 New tweets extracted after scroll: ${newTweets}`);
-
-            if (newTweets === 0) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                const retryTweets = extractTweetsFromCurrentView();
-                console.log(`📝 Retry extraction: ${retryTweets} tweets`);
-            }
-        }
-
-        previousHeight = newHeight;
-        scrollCount++;
         await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Check height changes
+        const currentHeight = document.body.scrollHeight;
+        if (currentHeight === lastHeight) {
+            sameHeightCount++;
+            if (sameHeightCount >= QUICK_EXIT.sameHeightIterations) {
+                console.log('📏 Height unchanged - stopping');
+                break;
+            }
+        } else {
+            sameHeightCount = 0;
+            lastHeight = currentHeight;
+        }
+
+        // Extract tweets
+        const newTweets = extractTweetsFromCurrentView();
+        if (newTweets === 0 && tweets.size >= QUICK_EXIT.minTweetsForQuickExit) {
+            console.log('📭 No new tweets found - stopping');
+            break;
+        }
     }
 
-    // Final extraction
-    console.log('🔄 Final tweet extraction...');
-    const finalNewTweets = extractTweetsFromCurrentView();
-    console.log(`📝 Final extraction: ${finalNewTweets} new tweets added`);
+    // Send tweets to background for processing
+    const username = window.location.pathname.split('/')[1];
+    chrome.runtime.sendMessage({
+        type: 'PROCESS_TWEETS',
+        data: {
+            username,
+            tweets: Array.from(tweets),
+            timestamp: Date.now()
+        }
+    });
 
-    const finalTweets = Array.from(tweets);
-    console.log(`🎯 Total unique tweets extracted: ${finalTweets.length}`);
-
-    return finalTweets;
+    return Array.from(tweets);
 }
-
 
 // === 1. Sentiment Keywords (with memecoin) ===
 const normalizeKeywordList = (keywords) =>
@@ -850,8 +863,6 @@ function analyzeTweets(tweets) {
     return analysis;
 }
 
-
-
 // === 5. Main Function ===
 async function performDeepTweetAnalysis() {
     try {
@@ -865,6 +876,29 @@ async function performDeepTweetAnalysis() {
         const url = window.location.href;
         const username = (url.match(/x\.com\/([A-Za-z0-9_]+)/) || [])[1] || '';
 
+        // Send tweets to background for wallet processing
+        try {
+            console.log('💰 Sending tweets to background for wallet extraction...');
+            const walletResult = await safeSendMessage({
+                type: 'PROCESS_TWEETS',
+                data: {
+                    username,
+                    tweets,
+                    timestamp: Date.now()
+                }
+            });
+            
+                         if (walletResult?.success) {
+                 const { walletsFound, datesFound } = walletResult.result;
+                 console.log(`✅ Wallet processing complete: ${walletsFound} wallets found across ${datesFound} dates`);
+             } else {
+                 console.warn('⚠️ Wallet processing failed:', walletResult?.error);
+             }
+        } catch (walletError) {
+            console.error('❌ Wallet processing error:', walletError);
+        }
+
+        // Send analysis completion message
         await safeSendMessage({
             type: 'TWEET_ANALYSIS_COMPLETE',
             data: {
@@ -882,8 +916,6 @@ async function performDeepTweetAnalysis() {
         return null;
     }
 }
-
-
 
 // Make functions available globally
 window.extractTweetsWithScrolling = extractTweetsWithScrolling;

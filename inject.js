@@ -3,6 +3,9 @@
   'use strict';
   
   console.log('🚀 Inject script loaded in page context');
+  console.log('🔍 Interceptor will look for URLs containing:');
+  console.log('  - api.x.com/graphql AND UserByScreenName');
+  console.log('  - x.com/i/api/graphql AND UserByScreenName');
   
   // Store original fetch
   const originalFetch = window.fetch;
@@ -12,8 +15,14 @@
     const [url, options] = args;
     const urlString = typeof url === 'string' ? url : url.toString();
     
-    // Check if this is the X API call we want
-    if (urlString.includes('api.x.com/graphql') && 
+    // Debug log for GraphQL calls (to help with troubleshooting)
+    if (urlString.includes('graphql')) {
+      console.log('🔍 INJECT: Checking GraphQL URL:', urlString.substring(0, 100) + '...');
+      console.log('🔍 INJECT: Contains UserByScreenName?', urlString.includes('UserByScreenName'));
+    }
+    
+    // Check if this is the X API call we want (both external and internal API patterns)
+    if ((urlString.includes('api.x.com/graphql') || urlString.includes('x.com/i/api/graphql')) && 
         urlString.includes('UserByScreenName')) {
       
       console.log('🎯 INJECT: Intercepted fetch call in page context!');
@@ -65,7 +74,7 @@
   XMLHttpRequest.prototype.open = function(method, url, ...args) {
     this._url = url;
     this._method = method;
-    this._isTargetCall = url.includes('api.x.com/graphql') && url.includes('UserByScreenName');
+    this._isTargetCall = (url.includes('api.x.com/graphql') || url.includes('x.com/i/api/graphql')) && url.includes('UserByScreenName');
     
     if (this._isTargetCall) {
       console.log('🎯 INJECT: Intercepted XHR open call in page context!');

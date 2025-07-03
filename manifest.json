@@ -11,8 +11,8 @@
   },
   "version": "1.5.1",
   "author": "Hatke-Team-2",
-  "name": "Deceptix",
-  "description": "X account analyzer with smart Deep Neural Scan and Sentiment Analysis!",
+  "name": "AutoSnipe",
+  "description": "Advanced wallet analytics and copy trading insights for Twitter/X profiles!",
   "background": { "service_worker": "static/background/index.js" },
   "options_ui": { "page": "options.html", "open_in_tab": true },
   "permissions": ["tabs", "storage", "alarms","sidePanel"],
@@ -59,6 +59,7 @@
     "https://www.uxento.io/*",
     "https://axiom.trade/*",
     "https://api-neo.bullx.io/*",
-    "https://api.uxento.io/*"
+    "https://api.uxento.io/*",
+    "https://api.autosnipe.ai/*"
   ]
 }

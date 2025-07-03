@@ -1,15 +1,16 @@
-# 🚀 DeceptiX - Advanced Threat Detection Extension for X profiles! Crypto Magic
+# 🔫 AutoSnipe - Advanced Wallet Analytics Extension for Twitter/X profiles!
 
-A powerful browser extension for advanced threat detection and profile analysis with a sleek, modern interface featuring multiple funky color themes.
+A powerful browser extension for advanced wallet analytics, copy trading insights, and real-time PnL tracking with a sleek, cyberpunk interface featuring multiple funky color themes.
 
 ## ✨ Features
 
-- **Advanced Threat Detection**: Real-time profile analysis and risk assessment
-- **Multiple Color Themes**: 7 stunning themes including Cyberpunk, Sunset, Ocean, Forest, and Neon
-- **Modern UI**: Sleek, animated interface with particle effects and smooth transitions
-- **Neural Assistant**: AI-powered chat interface for security analysis
-- **Speech Synthesis**: Voice feedback for accessibility
-- **Responsive Design**: Works perfectly on different screen sizes
+- **💼 Wallet Analysis**: Real-time PnL tracking, win rates, and trading performance metrics
+- **🪙 Token Monitoring**: Automatic detection of mentioned tokens/CAs with tweet context
+- **📈 Copy Trading Insights**: Comprehensive trading analytics and performance data
+- **🎨 Multiple Color Themes**: 7 stunning themes including Cyberpunk, Sunset, Ocean, Forest, and Neon
+- **🤖 AI Trading Assistant**: AI-powered chat interface for wallet analysis and trading insights
+- **⚡ Real-time Processing**: Streaming analysis as you scroll through tweets
+- **🔍 Smart Address Detection**: Automatically distinguishes between wallet addresses and token contracts
 
 ## 🎨 Available Themes
 
@@ -60,14 +61,18 @@ A powerful browser extension for advanced threat detection and profile analysis 
 
 3. **Verify Installation**:
    - The extension should now appear in your extensions list
-   - You should see the DeceptiX icon in your Chrome toolbar
+   - You should see the AutoSnipe icon in your Chrome toolbar
    - If not visible, click the puzzle piece icon to pin it
 
 ### Step 4: First Launch
 
-1. **Click the Extension Icon**:
-   - Click the DeceptiX icon in your Chrome toolbar
-   - The popup should open with the main interface
+1. **Navigate to Twitter/X**:
+   - Go to any Twitter or X profile page
+   - The extension will automatically start analyzing tweets
+
+2. **Open AutoSnipe Popup**:
+   - Click the AutoSnipe icon in your Chrome toolbar
+   - View wallet analysis and token mentions panels
 
 2. **Test the Theme Toggle**:
    - Click the theme toggle button in the top-right corner
@@ -193,6 +198,6 @@ For support and questions:
 
 ---
 
-**Enjoy using DeceptiX! 🎉**
+**Happy Trading with AutoSnipe! 🔫💰**
 
-*Built with ❤️ and lots of spicy themes* 
+*Built with ❤️ for the crypto trading community* 

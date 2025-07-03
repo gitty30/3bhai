@@ -1256,3 +1256,966 @@ window.testContentScriptCommunication = async function() {
     return null;
   }
 };
+
+// ===== WALLET AND TOKEN DATA FUNCTIONS =====
+
+// Global variables for wallet and token data
+let currentWalletData = null;
+let currentTokenData = null;
+let currentUsername = null;
+
+// Initialize wallet and token data loading
+async function initializeWalletTokenData() {
+  console.log('[POPUP] Initializing wallet and token data...');
+  
+  // Get current username from the page
+  const username = await getCurrentUsername();
+  if (!username) {
+    console.log('[POPUP] No username found, skipping wallet/token data');
+    return;
+  }
+  
+  currentUsername = username;
+  console.log('[POPUP] Current username:', username);
+  
+  // Load wallet and token data
+  await Promise.all([
+    loadWalletData(username),
+    loadTokenData(username)
+  ]);
+}
+
+// Get current username from various sources
+async function getCurrentUsername() {
+  try {
+    // Try to get from URL first
+    const tabs = await safeTabsQuery({ active: true, currentWindow: true });
+    if (tabs.length === 0) return null;
+    
+    const tab = tabs[0];
+    if (tab.url) {
+      const urlMatch = tab.url.match(/(?:twitter\.com|x\.com)\/([^\/\?]+)/);
+      if (urlMatch && urlMatch[1] && !urlMatch[1].includes('.')) {
+        return urlMatch[1];
+      }
+    }
+    
+    // Try to get from content script
+    try {
+      const response = await safeTabsSendMessage(tab.id, { action: 'get_username' });
+      if (response && response.username) {
+        return response.username;
+      }
+    } catch (err) {
+      console.log('[POPUP] Content script not available for username');
+    }
+    
+    // Try to get from stored profile data
+    try {
+      const profileResponse = await safeSendMessage({ action: 'getAxiomData' });
+      if (profileResponse && profileResponse.username) {
+        return profileResponse.username;
+      }
+    } catch (err) {
+      console.log('[POPUP] No stored profile data available');
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('[POPUP] Error getting username:', error);
+    return null;
+  }
+}
+
+// Load wallet data for a username
+async function loadWalletData(username) {
+  console.log('[POPUP] Loading wallet data for:', username);
+  
+  try {
+    const response = await safeSendMessage({
+      action: 'getWalletData',
+      username: username
+    });
+    
+    if (response && response.success && response.data) {
+      currentWalletData = response.data;
+      displayWalletData(response.data);
+      console.log('[POPUP] Wallet data loaded:', response.data);
+    } else {
+      console.log('[POPUP] No wallet data found for:', username);
+      displayNoWalletData();
+    }
+  } catch (error) {
+    console.error('[POPUP] Error loading wallet data:', error);
+    displayWalletError(error.message);
+  }
+}
+
+// Load token data for a username
+async function loadTokenData(username) {
+  console.log('[POPUP] Loading token data for:', username);
+  
+  try {
+    const response = await safeSendMessage({
+      action: 'getTokenData',
+      username: username
+    });
+    
+    if (response && response.success && response.data) {
+      currentTokenData = response.data;
+      displayTokenData(response.data);
+      console.log('[POPUP] Token data loaded:', response.data);
+    } else {
+      console.log('[POPUP] No token data found for:', username);
+      displayNoTokenData();
+    }
+  } catch (error) {
+    console.error('[POPUP] Error loading token data:', error);
+    displayTokenError(error.message);
+  }
+}
+
+// Display wallet data in the UI
+function displayWalletData(walletData) {
+  const walletPanel = document.getElementById('walletPanel');
+  const walletList = document.getElementById('walletList');
+  
+  if (!walletPanel || !walletList) return;
+  
+  // Show the panel
+  walletPanel.style.display = 'block';
+  
+  // Clear loading state
+  walletList.innerHTML = '';
+  
+  const data = walletData.data || walletData;
+  
+  if (!data || Object.keys(data).length === 0) {
+    displayNoWalletData();
+    return;
+  }
+  
+  // Group wallets by date and display
+  Object.keys(data).sort().reverse().forEach(date => {
+    const wallets = data[date];
+    if (!wallets || wallets.length === 0) return;
+    
+    // Create date group
+    const dateGroup = document.createElement('div');
+    dateGroup.className = 'date-group';
+    
+    const dateHeader = document.createElement('div');
+    dateHeader.className = 'date-header';
+    dateHeader.textContent = formatDateForDisplay(date);
+    dateGroup.appendChild(dateHeader);
+    
+    // Add wallets for this date
+    wallets.forEach(walletInfo => {
+      const walletItem = createWalletItem(walletInfo, date);
+      dateGroup.appendChild(walletItem);
+    });
+    
+    walletList.appendChild(dateGroup);
+  });
+}
+
+// Create a wallet item element
+function createWalletItem(walletInfo, date) {
+  const address = walletInfo.address || walletInfo;
+  const pnlData = walletInfo.pnlData;
+  const error = walletInfo.error;
+  
+  const walletItem = document.createElement('div');
+  walletItem.className = 'wallet-item';
+  
+  const header = document.createElement('div');
+  header.className = 'wallet-header';
+  
+  const addressDisplay = document.createElement('div');
+  addressDisplay.className = 'wallet-address-display';
+  addressDisplay.textContent = formatWalletAddress(address);
+  
+  const dateBadge = document.createElement('div');
+  dateBadge.className = 'wallet-date';
+  dateBadge.textContent = formatDateForDisplay(date);
+  
+  const copyButton = document.createElement('div');
+  copyButton.className = 'wallet-copy';
+  copyButton.innerHTML = '📋';
+  copyButton.title = 'Copy wallet address';
+  copyButton.addEventListener('click', () => copyWalletAddress(address));
+  
+  const refreshButton = document.createElement('button');
+  refreshButton.className = 'wallet-refresh';
+  refreshButton.textContent = '🔄';
+  refreshButton.title = 'Refresh PnL';
+  refreshButton.addEventListener('click', () => refreshWalletPnL(address));
+  
+  header.appendChild(addressDisplay);
+  header.appendChild(dateBadge);
+  header.appendChild(copyButton);
+  header.appendChild(refreshButton);
+  
+  walletItem.appendChild(header);
+  
+  if (error) {
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'wallet-error';
+    errorDiv.textContent = `Error: ${error}`;
+    walletItem.appendChild(errorDiv);
+  } else if (pnlData) {
+    const pnlMetrics = createPnLMetrics(pnlData);
+    walletItem.appendChild(pnlMetrics);
+  } else {
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'wallet-loading';
+    loadingDiv.innerHTML = '<div class="spinner"></div><p>Loading PnL...</p>';
+    walletItem.appendChild(loadingDiv);
+  }
+  
+  return walletItem;
+}
+
+// Create comprehensive PnL metrics display
+function createPnLMetrics(pnlData) {
+  const container = document.createElement('div');
+  
+  // Main PnL summary with unrealized gains
+  const summary = document.createElement('div');
+  summary.className = 'pnl-summary';
+  
+  const summaryHeader = document.createElement('div');
+  summaryHeader.className = 'pnl-summary-header';
+  summaryHeader.textContent = 'Realized P&L';
+  
+  const summaryValue = document.createElement('div');
+  summaryValue.className = 'pnl-summary-value';
+  
+  const pnlValue = pnlData.totalPnL || 0;
+  const pnlPercentage = pnlData.pnlPercentage || 0;
+  const unrealizedPnL = pnlData.unrealizedPnL || 0;
+  
+  summaryValue.innerHTML = `
+    ${formatPnLValue(pnlValue)} SOL
+    <span class="pnl-percentage">(${formatPercentage(pnlPercentage)})</span>
+  `;
+  
+  if (pnlValue > 0) {
+    summaryValue.classList.add('pnl-positive');
+  } else if (pnlValue < 0) {
+    summaryValue.classList.add('pnl-negative');
+  } else {
+    summaryValue.classList.add('pnl-neutral');
+  }
+  
+  summary.appendChild(summaryHeader);
+  summary.appendChild(summaryValue);
+  
+  // Add unrealized PnL if significant (greater than 0.01 SOL)
+  if (Math.abs(unrealizedPnL) > 0.01) {
+    const unrealizedDiv = document.createElement('div');
+    unrealizedDiv.className = 'pnl-unrealized';
+    unrealizedDiv.innerHTML = `
+      <span style="font-size: 10px; color: var(--text-secondary);">Unrealized: </span>
+      <span class="${unrealizedPnL > 0 ? 'pnl-positive' : 'pnl-negative'}" style="font-size: 11px; font-weight: 600;">
+        ${formatPnLValue(unrealizedPnL)} SOL
+      </span>
+    `;
+    summary.appendChild(unrealizedDiv);
+  }
+  
+  container.appendChild(summary);
+  
+  // Enhanced metrics grid with more data
+  const metricsGrid = document.createElement('div');
+  metricsGrid.className = 'pnl-metrics';
+  
+  const totalAssets = pnlData.totalAssets || 0;
+  const feePaid = pnlData.feePaid || 0;
+  const currentBalance = pnlData.currentBalance || 0;
+  const invested = pnlData.invested || 0;
+  
+  const metrics = [
+    { 
+      label: 'Balance', 
+      value: `${formatLargeNumber(currentBalance)} SOL`,
+      color: currentBalance > invested ? 'pnl-positive' : 'pnl-neutral'
+    },
+    { 
+      label: 'Invested', 
+      value: `${formatLargeNumber(invested)} SOL`,
+      color: 'pnl-neutral'
+    },
+    { 
+      label: 'Win Rate', 
+      value: `${(pnlData.winRate || 0).toFixed(1)}%`,
+      color: (pnlData.winRate || 0) > 50 ? 'pnl-positive' : 'pnl-negative'
+    },
+    { 
+      label: 'Portfolio Value', 
+      value: formatLargeNumber(totalAssets),
+      color: 'pnl-positive',
+      tooltip: 'Total portfolio value including all token holdings'
+    },
+    { 
+      label: 'Wins/Losses', 
+      value: `${pnlData.totalWins || 0}/${pnlData.totalLosses || 0}`,
+      color: (pnlData.totalWins || 0) > (pnlData.totalLosses || 0) ? 'pnl-positive' : 'pnl-negative'
+    },
+    { 
+      label: 'Fees Paid', 
+      value: `${feePaid.toFixed(3)} SOL`,
+      color: 'pnl-negative'
+    },
+    { 
+      label: 'Unique Tokens', 
+      value: `${pnlData.uniqueTokens || 0}`,
+      color: pnlData.uniqueTokens > 500 ? 'pnl-positive' : 'pnl-neutral',
+      tooltip: 'Total different tokens traded'
+    },
+    { 
+      label: 'Total Trades', 
+      value: `${(pnlData.totalWins || 0) + (pnlData.totalLosses || 0)}`,
+      color: 'pnl-neutral'
+    }
+  ];
+  
+  metrics.forEach(metric => {
+    const metricDiv = document.createElement('div');
+    metricDiv.className = 'pnl-metric';
+    if (metric.tooltip) {
+      metricDiv.title = metric.tooltip;
+    }
+    
+    const label = document.createElement('div');
+    label.className = 'pnl-metric-label';
+    label.textContent = metric.label;
+    
+    const value = document.createElement('div');
+    value.className = `pnl-metric-value ${metric.color || ''}`;
+    value.textContent = metric.value;
+    
+    metricDiv.appendChild(label);
+    metricDiv.appendChild(value);
+    metricsGrid.appendChild(metricDiv);
+  });
+  
+  container.appendChild(metricsGrid);
+  
+  // Trading performance insights
+  if (pnlData.topPerformers || pnlData.recentTrades || pnlData.dailyProfit) {
+    const insightsSection = createTradingInsights(pnlData);
+    container.appendChild(insightsSection);
+  }
+  
+  return container;
+}
+
+// Create trading insights section
+function createTradingInsights(pnlData) {
+  const insights = document.createElement('div');
+  insights.className = 'trading-insights';
+  
+  const header = document.createElement('div');
+  header.className = 'insights-header';
+  header.textContent = '📊 Trading Insights';
+  insights.appendChild(header);
+  
+  // Recent activity summary
+  if (pnlData.recentTrades && pnlData.recentTrades.length > 0) {
+    const recentSection = document.createElement('div');
+    recentSection.className = 'insight-item';
+    
+    const recentTrades = pnlData.recentTrades.slice(0, 5); // Last 5 trades
+    const recentWins = recentTrades.filter(trade => {
+      const profit = trade.pnl || trade.profit || 0;
+      return profit > 0;
+    }).length;
+    const recentPnL = recentTrades.reduce((sum, trade) => {
+      return sum + (trade.pnl || trade.profit || 0);
+    }, 0);
+    
+    recentSection.innerHTML = `
+      <div class="insight-label">Recent Activity (Last 5 trades)</div>
+      <div class="insight-value">
+        ${recentWins}/${recentTrades.length} wins, ${formatPnLValue(recentPnL)} SOL
+        <span class="${recentPnL > 0 ? 'pnl-positive' : 'pnl-negative'}" style="margin-left: 4px;">
+          ${recentPnL > 0 ? '📈' : '📉'}
+        </span>
+      </div>
+    `;
+    
+    insights.appendChild(recentSection);
+  }
+  
+  // Top performing tokens
+  if (pnlData.topPerformers && Object.keys(pnlData.topPerformers).length > 0) {
+    const topSection = document.createElement('div');
+    topSection.className = 'insight-item';
+    
+    const topTokens = Object.entries(pnlData.topPerformers).slice(0, 2);
+    
+    topSection.innerHTML = `
+      <div class="insight-label">🏆 Top Performers</div>
+      <div class="insight-value" style="font-size: 10px;">
+        ${topTokens.map(([token, data]) => 
+          `${token.substring(0, 8)}... (+${formatPnLValue(data.profit || 0)})`
+        ).join(', ')}
+      </div>
+    `;
+    
+    insights.appendChild(topSection);
+  }
+  
+  // Daily profit trend (last 7 days)
+  if (pnlData.dailyProfit && Object.keys(pnlData.dailyProfit).length > 0) {
+    const dailySection = document.createElement('div');
+    dailySection.className = 'insight-item';
+    
+    const dailyEntries = Object.entries(pnlData.dailyProfit)
+      .sort(([a], [b]) => new Date(b) - new Date(a))
+      .slice(0, 7);
+    
+    const totalWeeklyPnL = dailyEntries.reduce((sum, [, pnl]) => sum + (pnl || 0), 0);
+    const positiveDays = dailyEntries.filter(([, pnl]) => (pnl || 0) > 0).length;
+    
+    dailySection.innerHTML = `
+      <div class="insight-label">📅 Weekly Trend (Last 7 days)</div>
+      <div class="insight-value">
+        ${positiveDays}/${dailyEntries.length} green days, ${formatPnLValue(totalWeeklyPnL)} SOL
+        <span class="${totalWeeklyPnL > 0 ? 'pnl-positive' : 'pnl-negative'}" style="margin-left: 4px;">
+          ${totalWeeklyPnL > 0 ? '🔥' : '❄️'}
+        </span>
+      </div>
+    `;
+    
+    insights.appendChild(dailySection);
+  }
+  
+  // Token performance distribution using actual win/loss data
+  if (pnlData.totalWins !== undefined && pnlData.totalLosses !== undefined) {
+    const distSection = document.createElement('div');
+    distSection.className = 'insight-item';
+    
+    const totalTrades = pnlData.totalWins + pnlData.totalLosses;
+    const winRate = pnlData.winRate || 0;
+    
+    distSection.innerHTML = `
+      <div class="insight-label">🎯 Trade Success Rate</div>
+      <div class="insight-value">
+        ${pnlData.totalWins}/${totalTrades} trades won (${winRate.toFixed(1)}%)
+        <span class="${winRate > 50 ? 'pnl-positive' : 'pnl-negative'}" style="margin-left: 4px;">
+          ${winRate > 50 ? '🔥' : '❄️'}
+        </span>
+      </div>
+    `;
+    
+    insights.appendChild(distSection);
+  }
+  
+  // Worst performing tokens (if available)
+  if (pnlData.underPerformers && Object.keys(pnlData.underPerformers).length > 0) {
+    const worstSection = document.createElement('div');
+    worstSection.className = 'insight-item';
+    
+    const worstTokens = Object.entries(pnlData.underPerformers).slice(0, 2);
+    
+    worstSection.innerHTML = `
+      <div class="insight-label">💩 Worst Performers</div>
+      <div class="insight-value" style="font-size: 10px;">
+        ${worstTokens.map(([token, data]) => 
+          `${token.substring(0, 8)}... (${formatPnLValue(data.profit || data.loss || 0)})`
+        ).join(', ')}
+      </div>
+    `;
+    
+    insights.appendChild(worstSection);
+  }
+  
+  // Token diversity insight
+  if (pnlData.uniqueTokens && pnlData.totalWins && pnlData.totalLosses) {
+    const diversitySection = document.createElement('div');
+    diversitySection.className = 'insight-item';
+    
+    const totalTrades = pnlData.totalWins + pnlData.totalLosses;
+    const avgTradesPerToken = (totalTrades / pnlData.uniqueTokens).toFixed(1);
+    
+    diversitySection.innerHTML = `
+      <div class="insight-label">🎲 Trading Diversity</div>
+      <div class="insight-value">
+        ${pnlData.uniqueTokens} tokens, ${avgTradesPerToken} avg trades/token
+        <span style="margin-left: 4px;">
+          ${pnlData.uniqueTokens > 500 ? '🌈' : pnlData.uniqueTokens > 100 ? '🎯' : '📌'}
+        </span>
+      </div>
+    `;
+    
+    insights.appendChild(diversitySection);
+  }
+  
+  // Fee efficiency insight
+  if (pnlData.feePaid && pnlData.totalPnL !== undefined) {
+    const feeSection = document.createElement('div');
+    feeSection.className = 'insight-item';
+    
+    const feeEfficiency = ((pnlData.totalPnL / pnlData.feePaid) * 100).toFixed(1);
+    const isEfficient = pnlData.totalPnL > pnlData.feePaid;
+    
+    feeSection.innerHTML = `
+      <div class="insight-label">💰 Fee Efficiency</div>
+      <div class="insight-value">
+        ${feeEfficiency}% profit vs fees ratio
+        <span class="${isEfficient ? 'pnl-positive' : 'pnl-negative'}" style="margin-left: 4px;">
+          ${isEfficient ? '💎' : '🔥'}
+        </span>
+      </div>
+    `;
+    
+    insights.appendChild(feeSection);
+  }
+  
+  return insights;
+}
+
+// Enhanced number formatting for large values
+function formatLargeNumber(num) {
+  if (Math.abs(num) < 0.01) return '0.00';
+  
+  if (Math.abs(num) >= 1000000) {
+    return (num / 1000000).toFixed(2) + 'M';
+  } else if (Math.abs(num) >= 1000) {
+    return (num / 1000).toFixed(2) + 'K';
+  } else if (Math.abs(num) >= 1) {
+    return num.toFixed(2);
+  } else {
+    return num.toFixed(4);
+  }
+}
+
+// Display token data in the UI
+function displayTokenData(tokenData) {
+  const tokenPanel = document.getElementById('tokenPanel');
+  const tokenList = document.getElementById('tokenList');
+  
+  if (!tokenPanel || !tokenList) return;
+  
+  // Show the panel
+  tokenPanel.style.display = 'block';
+  
+  // Clear loading state
+  tokenList.innerHTML = '';
+  
+  const data = tokenData.data || tokenData;
+  
+  if (!data || Object.keys(data).length === 0) {
+    displayNoTokenData();
+    return;
+  }
+  
+  // Group tokens by date and display
+  Object.keys(data).sort().reverse().forEach(date => {
+    const tokens = data[date];
+    if (!tokens || tokens.length === 0) return;
+    
+    // Create date group
+    const dateGroup = document.createElement('div');
+    dateGroup.className = 'date-group';
+    
+    const dateHeader = document.createElement('div');
+    dateHeader.className = 'date-header';
+    dateHeader.textContent = formatDateForDisplay(date);
+    dateGroup.appendChild(dateHeader);
+    
+    // Add tokens for this date
+    tokens.forEach(tokenInfo => {
+      const tokenItem = createTokenItem(tokenInfo, date);
+      dateGroup.appendChild(tokenItem);
+    });
+    
+    tokenList.appendChild(dateGroup);
+  });
+}
+
+// Create a token item element
+function createTokenItem(tokenInfo, date) {
+  const tokenItem = document.createElement('div');
+  tokenItem.className = 'token-item';
+  
+  const header = document.createElement('div');
+  header.className = 'token-header';
+  
+  const addressDisplay = document.createElement('div');
+  addressDisplay.className = 'token-address-display';
+  addressDisplay.textContent = formatWalletAddress(tokenInfo.address);
+  
+  const dateBadge = document.createElement('div');
+  dateBadge.className = 'token-date';
+  dateBadge.textContent = formatDateForDisplay(tokenInfo.date || date);
+  
+  const copyButton = document.createElement('div');
+  copyButton.className = 'token-copy';
+  copyButton.innerHTML = '📋';
+  copyButton.title = 'Copy token address';
+  copyButton.addEventListener('click', () => copyTokenAddress(tokenInfo.address));
+  
+  header.appendChild(addressDisplay);
+  header.appendChild(dateBadge);
+  header.appendChild(copyButton);
+  
+  tokenItem.appendChild(header);
+  
+  if (tokenInfo.tweetText) {
+    const tweetDiv = document.createElement('div');
+    tweetDiv.className = 'token-tweet';
+    tweetDiv.textContent = tokenInfo.tweetText;
+    tokenItem.appendChild(tweetDiv);
+  }
+  
+  return tokenItem;
+}
+
+// Helper functions
+function formatDateForDisplay(dateStr) {
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
+  } catch (error) {
+    return dateStr;
+  }
+}
+
+function formatPnLValue(value) {
+  if (Math.abs(value) < 0.01) return '0.00';
+  return (value > 0 ? '+' : '') + value.toFixed(2);
+}
+
+function formatPercentage(value) {
+  if (Math.abs(value) < 0.01) return '0.0%';
+  return (value > 0 ? '+' : '') + value.toFixed(1) + '%';
+}
+
+function copyWalletAddress(address) {
+  copyToClipboard(address).then(() => {
+    console.log('[POPUP] Wallet address copied:', address);
+    showCopyFeedback('wallet', address);
+  }).catch(error => {
+    console.error('[POPUP] Failed to copy wallet address:', error);
+    showCopyError('wallet');
+  });
+}
+
+function copyTokenAddress(address) {
+  copyToClipboard(address).then(() => {
+    console.log('[POPUP] Token address copied:', address);
+    showCopyFeedback('token', address);
+  }).catch(error => {
+    console.error('[POPUP] Failed to copy token address:', error);
+    showCopyError('token');
+  });
+}
+
+function showCopyFeedback(type, address) {
+  // Find the copy button for this address
+  const copyButtons = document.querySelectorAll(`.${type}-copy`);
+  copyButtons.forEach(button => {
+    const item = button.closest(`.${type}-item`);
+    const addressDisplay = item?.querySelector(`.${type}-address-display`);
+    
+    if (addressDisplay && addressDisplay.textContent === formatWalletAddress(address)) {
+      // Store original content
+      const originalContent = button.innerHTML;
+      const originalTitle = button.title;
+      
+      // Show success feedback
+      button.innerHTML = '✅';
+      button.title = 'Copied!';
+      button.style.color = 'var(--cyber-green)';
+      button.style.transform = 'scale(1.2)';
+      
+      // Reset after 2 seconds
+      setTimeout(() => {
+        button.innerHTML = originalContent;
+        button.title = originalTitle;
+        button.style.color = '';
+        button.style.transform = '';
+      }, 2000);
+    }
+  });
+}
+
+function showCopyError(type) {
+  // Show generic error feedback for all copy buttons of this type
+  const copyButtons = document.querySelectorAll(`.${type}-copy`);
+  copyButtons.forEach(button => {
+    const originalContent = button.innerHTML;
+    const originalTitle = button.title;
+    
+    button.innerHTML = '❌';
+    button.title = 'Copy failed';
+    button.style.color = 'var(--red-danger)';
+    button.style.transform = 'scale(1.2)';
+    
+    setTimeout(() => {
+      button.innerHTML = originalContent;
+      button.title = originalTitle;
+      button.style.color = '';
+      button.style.transform = '';
+    }, 2000);
+  });
+}
+
+function refreshWalletPnL(address) {
+  if (!currentUsername) return;
+  
+  console.log('[POPUP] Refreshing PnL for wallet:', address);
+  
+  // Update UI to show loading state for this specific wallet
+  const walletItems = document.querySelectorAll('.wallet-item');
+  let targetWalletItem = null;
+  
+  walletItems.forEach(item => {
+    const addressDisplay = item.querySelector('.wallet-address-display');
+    if (addressDisplay && addressDisplay.textContent === formatWalletAddress(address)) {
+      targetWalletItem = item;
+    }
+  });
+  
+  if (targetWalletItem) {
+    // Remove existing PnL content and show loading
+    const existingPnL = targetWalletItem.querySelector('.pnl-summary, .pnl-metrics, .wallet-error');
+    if (existingPnL) {
+      existingPnL.remove();
+    }
+    
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'wallet-loading';
+    loadingDiv.innerHTML = '<div class="spinner"></div><p>Refreshing PnL...</p>';
+    targetWalletItem.appendChild(loadingDiv);
+    
+    // Disable refresh button
+    const refreshBtn = targetWalletItem.querySelector('.wallet-refresh');
+    if (refreshBtn) {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = '⏳';
+    }
+  }
+  
+  // Trigger PnL refresh via background script
+  chrome.runtime.sendMessage({
+    action: 'REFRESH_SINGLE_WALLET_PNL',
+    username: currentUsername,
+    walletAddress: address
+  }, (response) => {
+    console.log('[POPUP] PnL refresh response:', response);
+    
+    // Re-enable refresh button
+    if (targetWalletItem) {
+      const refreshBtn = targetWalletItem.querySelector('.wallet-refresh');
+      if (refreshBtn) {
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = '🔄';
+      }
+    }
+    
+    if (response && response.success) {
+      console.log('[POPUP] PnL refreshed for wallet:', address);
+      // Reload wallet data to show updated PnL
+      setTimeout(() => loadWalletData(currentUsername), 1000);
+    } else {
+      console.error('[POPUP] Failed to refresh PnL:', response?.error);
+      
+      // Show error in the wallet item
+      if (targetWalletItem) {
+        const loadingDiv = targetWalletItem.querySelector('.wallet-loading');
+        if (loadingDiv) {
+          loadingDiv.remove();
+        }
+        
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'wallet-error';
+        errorDiv.textContent = `Error: ${response?.error || 'Failed to refresh PnL'}`;
+        targetWalletItem.appendChild(errorDiv);
+      }
+    }
+  });
+}
+
+function displayNoWalletData() {
+  const walletList = document.getElementById('walletList');
+  if (walletList) {
+    walletList.innerHTML = '<div class="no-data">No wallet addresses found</div>';
+  }
+}
+
+function displayNoTokenData() {
+  const tokenList = document.getElementById('tokenList');
+  if (tokenList) {
+    tokenList.innerHTML = '<div class="no-data">No token addresses found</div>';
+  }
+}
+
+function displayWalletError(error) {
+  const walletList = document.getElementById('walletList');
+  if (walletList) {
+    walletList.innerHTML = `<div class="wallet-error">Error loading wallet data: ${error}</div>`;
+  }
+}
+
+function displayTokenError(error) {
+  const tokenList = document.getElementById('tokenList');
+  if (tokenList) {
+    tokenList.innerHTML = `<div class="token-error">Error loading token data: ${error}</div>`;
+  }
+}
+
+// Refresh all wallets PnL
+function refreshAllWallets() {
+  if (!currentUsername) {
+    console.log('[POPUP] No username available for refresh');
+    return;
+  }
+  
+  console.log('[POPUP] Refreshing all wallets for:', currentUsername);
+  
+  // Update UI to show loading state
+  const refreshBtn = document.getElementById('refreshWallets');
+  const walletList = document.getElementById('walletList');
+  
+  if (refreshBtn) {
+    refreshBtn.disabled = true;
+    refreshBtn.innerHTML = '⏳';
+    refreshBtn.title = 'Refreshing...';
+  }
+  
+  if (walletList) {
+    walletList.innerHTML = `
+      <div class="wallet-loading">
+        <div class="spinner"></div>
+        <p>Refreshing all wallet PnL data...</p>
+        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;">
+          This may take a few minutes due to API delays
+        </div>
+      </div>
+    `;
+  }
+  
+  // Trigger refresh via background script
+  chrome.runtime.sendMessage({
+    action: 'REFRESH_ALL_WALLETS_PNL',
+    username: currentUsername
+  }, (response) => {
+    console.log('[POPUP] Refresh all response:', response);
+    
+    // Re-enable refresh button
+    if (refreshBtn) {
+      refreshBtn.disabled = false;
+      refreshBtn.innerHTML = '🔄';
+      refreshBtn.title = 'Refresh PnL Data';
+    }
+    
+    if (response && response.success) {
+      console.log('[POPUP] All wallets PnL refreshed successfully');
+      // Reload wallet data to show updated results
+      setTimeout(() => loadWalletData(currentUsername), 1000);
+    } else {
+      console.error('[POPUP] Failed to refresh all wallets:', response?.error);
+      
+      // Show error in the wallet list
+      if (walletList) {
+        walletList.innerHTML = `
+          <div class="wallet-error">
+            Error refreshing wallets: ${response?.error || 'Unknown error'}
+            <br><button onclick="loadWalletData('${currentUsername}')" style="margin-top: 8px; padding: 4px 8px; background: var(--panel-bg); border: 1px solid var(--panel-border); color: var(--text-primary); border-radius: 4px; cursor: pointer;">Retry</button>
+          </div>
+        `;
+      }
+    }
+  });
+}
+
+// Listen for real-time PnL progress updates
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'PNL_PROGRESS_UPDATE') {
+    console.log('[POPUP] PnL progress update:', message);
+    
+    // Update specific wallet in UI if visible
+    if (message.wallet && currentUsername === message.username) {
+      updateWalletProgress(message.wallet, message.status, message.data);
+    }
+  }
+});
+
+// Update wallet progress in real-time
+function updateWalletProgress(walletAddress, status, data) {
+  const walletItems = document.querySelectorAll('.wallet-item');
+  
+  walletItems.forEach(item => {
+    const addressDisplay = item.querySelector('.wallet-address-display');
+    if (addressDisplay && addressDisplay.textContent === formatWalletAddress(walletAddress)) {
+      const existingPnL = item.querySelector('.pnl-summary, .pnl-metrics, .wallet-error, .wallet-loading');
+      if (existingPnL) {
+        existingPnL.remove();
+      }
+      
+      if (status === 'requesting' || status === 'waiting' || status === 'polling' || status === 'processing') {
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'wallet-loading';
+        let statusText = 'Loading PnL...';
+        
+        switch (status) {
+          case 'requesting':
+            statusText = 'Requesting simulation...';
+            break;
+          case 'waiting':
+            statusText = 'Waiting for API...';
+            break;
+          case 'polling':
+            statusText = 'Fetching results...';
+            break;
+          case 'processing':
+            statusText = 'Processing data...';
+            break;
+        }
+        
+        loadingDiv.innerHTML = `<div class="spinner"></div><p>${statusText}</p>`;
+        item.appendChild(loadingDiv);
+        
+      } else if (status === 'completed' && data) {
+        const pnlMetrics = createPnLMetrics(data);
+        item.appendChild(pnlMetrics);
+        
+      } else if (status === 'failed') {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'wallet-error';
+        errorDiv.textContent = `Error: ${data?.message || data || 'Failed to fetch PnL'}`;
+        item.appendChild(errorDiv);
+      }
+    }
+  });
+}
+
+// Enhanced DOMContentLoaded handler to include wallet/token initialization
+document.addEventListener('DOMContentLoaded', function() {
+  // Add refresh button event listener
+  const refreshBtn = document.getElementById('refreshWallets');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', refreshAllWallets);
+    refreshBtn.title = 'Refresh PnL Data';
+  }
+  
+  // Initialize wallet and token data after a short delay to allow other initialization
+  setTimeout(initializeWalletTokenData, 1000);
+  
+  // Also try to load data when popup becomes visible (in case user reopens)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && currentUsername) {
+      console.log('[POPUP] Popup became visible, refreshing data');
+      loadWalletData(currentUsername);
+      loadTokenData(currentUsername);
+    }
+  });
+});

@@ -135,6 +135,7 @@
     const urlString = typeof url === 'string' ? url : url.toString();
     return (
       (urlString.includes('api.x.com/graphql') && urlString.includes('UserByScreenName')) ||
+      (urlString.includes('x.com/i/api/graphql') && urlString.includes('UserByScreenName')) ||
       (urlString.includes('api.twitter.com/graphql') && urlString.includes('UserByScreenName')) ||
       (urlString.includes('graphql') && urlString.includes('UserByScreenName'))
     );
@@ -562,7 +563,7 @@
   window.triggerApiCall = function() {
     console.log('🚀 Manually triggering API call...');
     
-    const apiUrl = 'https://api.x.com/graphql/jUKA--0QkqGIFhmfRZdWrQ/UserByScreenName?variables=%7B%22screen_name%22%3A%22elonmusk%22%7D&features=%7B%22responsive_web_grok_bio_auto_translation_is_enabled%22%3Afalse%2C%22hidden_profile_subscriptions_enabled%22%3Atrue%2C%22payments_enabled%22%3Afalse%2C%22profile_label_improvements_pcf_label_in_post_enabled%22%3Atrue%2C%22rweb_tipjar_consumption_enabled%22%3Atrue%2C%22verified_phone_label_enabled%22%3Atrue%2C%22subscriptions_verification_info_is_identity_verified_enabled%22%3Atrue%2C%22subscriptions_verification_info_verified_since_enabled%22%3Atrue%2C%22highlights_tweets_tab_ui_enabled%22%3Atrue%2C%22responsive_web_twitter_article_notes_tab_enabled%22%3Atrue%2C%22subscriptions_feature_can_gift_premium%22%3Atrue%2C%22creator_subscriptions_tweet_preview_api_enabled%22%3Atrue%2C%22responsive_web_graphql_skip_user_profile_image_extensions_enabled%22%3Afalse%2C%22responsive_web_graphql_timeline_navigation_enabled%22%3Atrue%7D&fieldToggles=%7B%22withAuxiliaryUserLabels%22%3Atrue%7D';
+    const apiUrl = 'https://x.com/i/api/graphql/jUKA--0QkqGIFhmfRZdWrQ/UserByScreenName?variables=%7B%22screen_name%22%3A%22elonmusk%22%7D&features=%7B%22responsive_web_grok_bio_auto_translation_is_enabled%22%3Afalse%2C%22hidden_profile_subscriptions_enabled%22%3Atrue%2C%22payments_enabled%22%3Afalse%2C%22profile_label_improvements_pcf_label_in_post_enabled%22%3Atrue%2C%22rweb_tipjar_consumption_enabled%22%3Atrue%2C%22verified_phone_label_enabled%22%3Atrue%2C%22subscriptions_verification_info_is_identity_verified_enabled%22%3Atrue%2C%22subscriptions_verification_info_verified_since_enabled%22%3Atrue%2C%22highlights_tweets_tab_ui_enabled%22%3Atrue%2C%22responsive_web_twitter_article_notes_tab_enabled%22%3Atrue%2C%22subscriptions_feature_can_gift_premium%22%3Atrue%2C%22creator_subscriptions_tweet_preview_api_enabled%22%3Atrue%2C%22responsive_web_graphql_skip_user_profile_image_extensions_enabled%22%3Afalse%2C%22responsive_web_graphql_timeline_navigation_enabled%22%3Atrue%7D&fieldToggles=%7B%22withAuxiliaryUserLabels%22%3Atrue%7D';
     
     console.log('Making API call to:', apiUrl);
     
@@ -687,5 +688,226 @@
       }
     });
   };
+  
+
+  
+  async function extractTweetsWithScrolling() {
+    const tweets = new Set();
+    const walletMap = new Map(); // date -> wallet address mapping
+    const processedElements = new Set();
+    let previousHeight = document.body.scrollHeight;
+    let scrollCount = 0;
+    const maxScrolls = 8;
+    const QUICK_EXIT_CONDITIONS = {
+        noNewTweetsTimeout: 3000,
+        minTweetsForQuickExit: 2,
+        sameHeightIterations: 2,
+        sameContentIterations: 2
+    };
+
+    // Regex patterns
+    const PATTERNS = {
+        // Matches Solana addresses (base58 format, 32-44 chars)
+        solanaAddress: /\b[1-9A-HJ-NP-Za-km-z]{32,44}\b/g,
+        // Matches date in tweet format: "· Mar 19, 2024" or "· 19h" or "· 2d"
+        tweetDate: /·\s*(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4}|\d{1,2}[hd])/i
+    };
+
+    function extractDateAndWallet(tweetContent) {
+        // Extract date
+        const dateMatch = tweetContent.match(PATTERNS.tweetDate);
+        let tweetDate = null;
+        
+        if (dateMatch) {
+            const dateStr = dateMatch[0].replace('·', '').trim();
+            
+            // Convert relative time to actual date
+            if (dateStr.endsWith('h')) {
+                const hoursAgo = parseInt(dateStr);
+                tweetDate = new Date(Date.now() - (hoursAgo * 60 * 60 * 1000));
+            } else if (dateStr.endsWith('d')) {
+                const daysAgo = parseInt(dateStr);
+                tweetDate = new Date(Date.now() - (daysAgo * 24 * 60 * 60 * 1000));
+            } else {
+                tweetDate = new Date(dateStr);
+            }
+        }
+
+        // Extract wallet addresses
+        const walletAddresses = tweetContent.match(PATTERNS.solanaAddress) || [];
+        
+        // Validate addresses
+        const validAddresses = walletAddresses.filter(addr => {
+            return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr);
+        });
+
+        return {
+            date: tweetDate ? tweetDate.toISOString().split('T')[0] : null,
+            wallets: validAddresses
+        };
+    }
+
+    let lastNewTweetTime = Date.now();
+    let sameHeightCount = 0;
+    let sameContentCount = 0;
+    let lastTweetCount = 0;
+
+    console.log('🔄 Starting optimized tweet extraction...');
+
+    function shouldQuickExit() {
+        const timeSinceLastTweet = Date.now() - lastNewTweetTime;
+        const hasMinimumTweets = tweets.size >= QUICK_EXIT_CONDITIONS.minTweetsForQuickExit;
+        
+        if (hasMinimumTweets) {
+            // Check time-based exit
+            if (timeSinceLastTweet > QUICK_EXIT_CONDITIONS.noNewTweetsTimeout) {
+                console.log(`⏰ No new tweets for ${QUICK_EXIT_CONDITIONS.noNewTweetsTimeout/1000}s with ${tweets.size} tweets - quick exit`);
+                return true;
+            }
+
+            // Check height-based exit
+            if (sameHeightCount >= QUICK_EXIT_CONDITIONS.sameHeightIterations) {
+                console.log(`📏 Page height unchanged for ${sameHeightCount} iterations with ${tweets.size} tweets - quick exit`);
+                return true;
+            }
+
+            // Check content-based exit
+            if (sameContentCount >= QUICK_EXIT_CONDITIONS.sameContentIterations) {
+                console.log(`📄 Content unchanged for ${sameContentCount} iterations with ${tweets.size} tweets - quick exit`);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    function extractTweetsFromCurrentView() {
+        const tweetArticles = document.querySelectorAll('article[role="article"]');
+        let newTweetsCount = 0;
+        const currentTweetCount = tweets.size;
+
+        tweetArticles.forEach((article) => {
+            if (processedElements.has(article)) return;
+            
+            const tweetContent = article.innerText || '';
+            const trimmedContent = tweetContent.trim();
+            
+            if (trimmedContent && trimmedContent.length > 10) {
+                if (!tweets.has(trimmedContent)) {
+                    tweets.add(trimmedContent);
+                    newTweetsCount++;
+                    lastNewTweetTime = Date.now();
+                    
+                    // Extract date and wallet addresses
+                    const { date, wallets } = extractDateAndWallet(trimmedContent);
+                    
+                    if (date && wallets.length > 0) {
+                        // Store the first wallet address found for this date
+                        walletMap.set(date, wallets[0]);
+                        
+                        console.log(`📅 Found wallet for ${date}:`, wallets[0]);
+                    }
+                    
+                    console.log(`📄 New tweet ${tweets.size}:`);
+                    console.log(`${trimmedContent}`);
+                    console.log('─'.repeat(80));
+                }
+            }
+            processedElements.add(article);
+        });
+
+        // Update content change tracking
+        if (tweets.size === lastTweetCount) {
+            sameContentCount++;
+        } else {
+            sameContentCount = 0;
+            lastTweetCount = tweets.size;
+        }
+
+        return newTweetsCount;
+    }
+
+    // Initial load with minimal wait
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    const initialTweets = extractTweetsFromCurrentView();
+    console.log(`📊 Initially found ${initialTweets} tweets`);
+
+    // Main extraction loop with quick exit conditions
+    while (scrollCount < maxScrolls && !shouldQuickExit()) {
+        const currentHeight = document.body.scrollHeight;
+        const currentScrollY = window.scrollY;
+
+        // Single smooth scroll to bottom
+        window.scrollTo({
+            top: document.body.scrollHeight,
+            behavior: 'smooth'
+        });
+
+        // Short wait for content load
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        const newHeight = document.body.scrollHeight;
+        
+        // Update height change tracking
+        if (newHeight === currentHeight) {
+            sameHeightCount++;
+        } else {
+            sameHeightCount = 0;
+        }
+
+        // Extract new tweets
+        const newTweets = extractTweetsFromCurrentView();
+        console.log(`📝 Iteration ${scrollCount + 1}: Found ${newTweets} new tweets (Total: ${tweets.size})`);
+
+        scrollCount++;
+    }
+
+    console.log('🎯 ========== EXTRACTION COMPLETE ==========');
+    console.log(`📊 Total unique tweets: ${tweets.size}`);
+    console.log(`💰 Wallet addresses found: ${walletMap.size}`);
+    console.log('📅 Date -> Wallet mapping:');
+    for (const [date, wallet] of walletMap) {
+        console.log(`${date}: ${wallet}`);
+    }
+    console.log('🎯 ==========================================');
+
+    // Return both tweets and wallet mapping
+    return {
+        tweets: Array.from(tweets),
+        walletMap: Object.fromEntries(walletMap)
+    };
+  }
+  
+  // Update the deep analysis function to handle the new return format
+  async function performDeepTweetAnalysis() {
+    try {
+        console.log('🔍 Starting deep tweet analysis...');
+        const { tweets, walletMap } = await extractTweetsWithScrolling();
+        console.log(`📊 Extracted ${tweets.length} tweets`);
+
+        // Send wallet mapping to background script for storage
+        if (Object.keys(walletMap).length > 0) {
+            const url = window.location.href;
+            const username = (url.match(/x\.com\/([A-Za-z0-9_]+)/) || [])[1] || '';
+            
+            await chrome.runtime.sendMessage({
+                type: 'WALLET_MAPPING_FOUND',
+                data: {
+                    username,
+                    wallet_list: walletMap,
+                    timestamp: Date.now()
+                }
+            });
+        }
+
+        const analysis = analyzeTweets(tweets);
+        // ... rest of your analysis code ...
+
+        return { tweets, analysis, walletMap };
+    } catch (err) {
+        console.error('❌ Analysis failed:', err);
+        return null;
+    }
+  }
   
 })(); 

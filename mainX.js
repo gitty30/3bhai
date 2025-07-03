@@ -111,6 +111,29 @@ var e, t;
             };
           async function i(e) {
             try {
+              // First check if we already have intercepted data for this user
+              const interceptedDataKey = `profile_data_${e}`;
+              const interceptedData = await safeStorageGet(interceptedDataKey);
+              
+              if (interceptedData && interceptedData[interceptedDataKey]) {
+                console.info(`[NEURAL_SCAN] Using intercepted data for @${e} (skipping API call)`);
+                const data = interceptedData[interceptedDataKey].data;
+                // Convert intercepted data format to expected format
+                const formattedData = [{
+                  id: data.id,
+                  username: data.username,
+                  screen_names: { [data.username]: [data.created_at] },
+                  source: 'intercepted',
+                  ...data
+                }];
+                d[e] = formattedData;
+                await safeStorageSet(`ux_twitter_${e}`, formattedData);
+                m(e, formattedData);
+                return;
+              }
+              
+              // Fallback to API call only if no intercepted data is available
+              console.info(`[NEURAL_SCAN] No intercepted data found for @${e}, fetching from API...`);
               let t = await safeSendMessage({
                 action: "fetchTwitterData",
                 username: e,
@@ -510,6 +533,30 @@ function safeStorageSet(key, value) {
         } catch (e) {
             console.warn('[MAINX] Failed to set storage:', e.message);
             resolve();
+        }
+    });
+}
+
+// Safe wrapper for chrome.storage.local.get
+function safeStorageGet(key) {
+    if (!isExtensionContextValid()) {
+        console.warn('[MAINX] Extension context invalid, skipping storage get');
+        return Promise.resolve({});
+    }
+    
+    return new Promise((resolve, reject) => {
+        try {
+            chrome.storage.local.get([key], (result) => {
+                if (chrome.runtime.lastError) {
+                    console.warn('[MAINX] Storage error:', chrome.runtime.lastError.message);
+                    resolve({});
+                } else {
+                    resolve(result);
+                }
+            });
+        } catch (e) {
+            console.warn('[MAINX] Failed to get storage:', e.message);
+            resolve({});
         }
     });
 }
