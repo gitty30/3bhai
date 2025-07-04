@@ -10,6 +10,9 @@
     "default_path": "sidebar.html"
   },
   "version": "1.5.1",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
   "author": "Hatke-Team-2",
   "name": "AutoSnipe",
   "description": "Advanced wallet analytics and copy trading insights for Twitter/X profiles!",

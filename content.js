@@ -307,7 +307,7 @@ startObserver();
 // Inject the interceptor script into page context
 injectInterceptorScript();
 
-// Respond to popup requests for latest data
+// Listen for messages from popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     try {
         if (message.action === "get_profile_data") {
@@ -624,302 +624,159 @@ window.testDataExtraction = function() {
     }
 };
 
-// Tweet Analysis Functionality
-async function extractTweetsWithScrolling() {
-    const tweets = new Set();
-    const walletMap = new Map();
-    const processedElements = new Set();
-    
-    // Quick exit conditions
-    const QUICK_EXIT = {
-        noNewTweetsTimeout: 3000,
-        minTweetsForQuickExit: 2,
-        sameHeightIterations: 2
-    };
+// Global state for tracking processed data
+const GLOBAL_STATE = {
+    processedElements: new Set(),
+    processedWallets: new Set(),
+    processedTweets: new Set(),
+    lastProcessingTimestamp: 0
+};
 
-    let lastNewTweetTime = Date.now();
-    let sameHeightCount = 0;
-    let lastHeight = document.body.scrollHeight;
+// Throttling configuration
+const THROTTLE_CONFIG = {
+    MIN_INTERVAL_MS: 5000,  // Minimum 5 seconds between processing batches
+    MAX_SCROLL_ATTEMPTS: 3,
+    SCROLL_DELAY_MS: 1500
+};
 
-    // Simple tweet extraction
-    function extractTweetsFromCurrentView() {
-        const tweetArticles = document.querySelectorAll('.css-175oi2r article[role="article"]');
-        let newTweetsCount = 0;
-
-        tweetArticles.forEach((article) => {
-            if (processedElements.has(article)) return;
+// Enhanced wallet extraction with stricter validation
+function extractWallets(text) {
+    // More strict Solana wallet address regex
+    const walletRegex = /\b[1-9A-HJ-NP-Za-km-z]{32,44}\b/g;
+    const wallets = (text.match(walletRegex) || [])
+        .filter(wallet => {
+            // Additional validation
+            const isValidLength = wallet.length >= 32 && wallet.length <= 44;
+            const hasValidCharacters = /^[1-9A-HJ-NP-Za-km-z]+$/.test(wallet);
+            const notProcessedBefore = !GLOBAL_STATE.processedWallets.has(wallet);
             
-            const tweetContent = article.innerText || '';
-            if (!tweets.has(tweetContent) && tweetContent.trim().length > 10) {
-                tweets.add(tweetContent);
-                newTweetsCount++;
-                lastNewTweetTime = Date.now();
-            }
-            processedElements.add(article);
+            return isValidLength && hasValidCharacters && notProcessedBefore;
         });
+    
+    // Mark processed wallets
+    wallets.forEach(wallet => GLOBAL_STATE.processedWallets.add(wallet));
+    
+    return wallets;
+}
 
-        return newTweetsCount;
+async function extractTweetsWithScrolling() {
+    const timestampedWallets = {};
+    let scrollAttempts = 0;
+    
+    // Prevent too frequent processing
+    const currentTime = Date.now();
+    if (currentTime - GLOBAL_STATE.lastProcessingTimestamp < THROTTLE_CONFIG.MIN_INTERVAL_MS) {
+        console.log('⏳ Throttling: Too soon since last processing');
+        return { timestampedWallets };
     }
 
-    // Initial extraction
-    console.log('📜 Starting tweet extraction...');
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    extractTweetsFromCurrentView();
+    GLOBAL_STATE.lastProcessingTimestamp = currentTime;
 
-    // Scroll and extract
-    while (true) {
-        // Check exit conditions
-        const timeSinceLastTweet = Date.now() - lastNewTweetTime;
-        if (timeSinceLastTweet > QUICK_EXIT.noNewTweetsTimeout && 
-            tweets.size >= QUICK_EXIT.minTweetsForQuickExit) {
-            console.log('⏰ No new tweets timeout - stopping');
-            break;
-        }
+    function extractTweetsFromCurrentView() {
+        const tweetArticles = document.querySelectorAll('.css-175oi2r article[role="article"]');
+        let newWalletsCount = 0;
 
-        // Scroll
+        tweetArticles.forEach((article) => {
+            // Prevent processing same article multiple times
+            if (GLOBAL_STATE.processedElements.has(article)) return;
+            
+            const tweetContent = article.innerText || '';
+            const timeElement = article.querySelector('time[datetime]');
+            
+            if (timeElement) {
+                const exactTimestamp = timeElement.getAttribute('datetime');
+                if (exactTimestamp) {
+                    const epochTimestamp = new Date(exactTimestamp).getTime();
+                    
+                    // Prevent processing same tweet content
+                    const contentHash = btoa(tweetContent);
+                    if (GLOBAL_STATE.processedTweets.has(contentHash)) return;
+                    GLOBAL_STATE.processedTweets.add(contentHash);
+
+                    // Extract unique wallets
+                    const wallets = extractWallets(tweetContent);
+
+                    if (wallets.length > 0) {
+                        console.log(`💼 Found ${wallets.length} unique wallets at ${exactTimestamp}`);
+                        timestampedWallets[epochTimestamp] = wallets;
+                        newWalletsCount += wallets.length;
+            }
+                }
+            }
+            
+            GLOBAL_STATE.processedElements.add(article);
+        });
+
+        return newWalletsCount;
+    }
+
+    // Scroll and extract with controlled attempts
+    while (scrollAttempts < THROTTLE_CONFIG.MAX_SCROLL_ATTEMPTS) {
         window.scrollTo({
             top: document.body.scrollHeight,
             behavior: 'smooth'
         });
 
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        // Check height changes
-        const currentHeight = document.body.scrollHeight;
-        if (currentHeight === lastHeight) {
-            sameHeightCount++;
-            if (sameHeightCount >= QUICK_EXIT.sameHeightIterations) {
-                console.log('📏 Height unchanged - stopping');
-                break;
-            }
-        } else {
-            sameHeightCount = 0;
-            lastHeight = currentHeight;
-        }
-
-        // Extract tweets
-        const newTweets = extractTweetsFromCurrentView();
-        if (newTweets === 0 && tweets.size >= QUICK_EXIT.minTweetsForQuickExit) {
-            console.log('📭 No new tweets found - stopping');
+        await new Promise(resolve => setTimeout(resolve, THROTTLE_CONFIG.SCROLL_DELAY_MS));
+        
+        const newWalletsCount = extractTweetsFromCurrentView();
+        
+        if (newWalletsCount === 0) {
+            console.log('📭 No new wallets found in this batch');
             break;
         }
+        
+        scrollAttempts++;
     }
 
-    // Send tweets to background for processing
+    // Log and send results
+    console.log('📊 Final timestamped wallets:', timestampedWallets);
+    
     const username = window.location.pathname.split('/')[1];
     chrome.runtime.sendMessage({
         type: 'PROCESS_TWEETS',
         data: {
             username,
-            tweets: Array.from(tweets),
+            timestampedWallets,
             timestamp: Date.now()
         }
     });
 
-    return Array.from(tweets);
+    return { timestampedWallets };
 }
 
-// === 1. Sentiment Keywords (with memecoin) ===
-const normalizeKeywordList = (keywords) =>
-    [...new Set(keywords.map(k => k.toLowerCase()))];
-
-const sentimentKeywords = {
-    bullish: normalizeKeywordList([
-        "bullish", "long", "buy", "pump", "moon", "ATH", "breakout", "rally", "up", "gain", "profit", "strong", "HODL", "diamond hands", "🚀", "📈",
-        "accumulate", "accumulation", "bull run", "bull market", "surge", "soar", "skyrocket", "explode", "rocket", "blast off", "liftoff", "mooning", "to the moon", "lambo", "lamborghini",
-        "wealth", "riches", "millionaire", "billionaire", "fortunes", "trending up", "uptrend", "support", "bounce", "recovery", "rebound", "bullish divergence", "golden cross",
-        "buy the dip", "BTD", "💎🙌", "hodl", "hold", "strong hands", "not selling", "never selling", "long term", "fundamentals", "adoption", "mass adoption",
-        "institutional", "whale", "whales buying", "smart money", "accumulation phase", "consolidation", "breakout imminent", "cup and handle", "ascending triangle", "flag pattern",
-        "bull flag", "continuation", "next leg up", "higher highs", "higher lows", "bullish engulfing", "hammer", "doji", "green candle", "bullish momentum", "RSI oversold",
-        "MACD bullish", "stochastic oversold", "fibonacci retracement", "golden ratio", "golden pocket", "accumulation zone", "distribution", "smart accumulation", "value investing"
-    ]),
-    bearish: normalizeKeywordList([
-        "bearish", "short", "sell", "dump", "crash", "dip", "down", "loss", "weak", "FUD", "bear trap", "🩸", "📉",
-        "bear market", "bear run", "dumpster fire", "shitcoin", "scam", "rug pull", "exit scam", "ponzi", "pyramid scheme", "bubble", "bubble burst", "correction", "crash landing",
-        "free fall", "plunge", "tank", "tanking", "sinking", "sinking ship", "going to zero", "worthless", "dead coin", "zombie coin", "ghost chain", "abandoned project",
-        "sell the news", "sell signal", "distribution", "whales selling", "smart money leaving", "institutional selling", "panic sell", "FOMO out", "fear", "greed index low",
-        "bearish divergence", "death cross", "resistance", "rejection", "lower highs", "lower lows", "downtrend", "bear flag", "descending triangle", "head and shoulders",
-        "double top", "triple top", "bearish engulfing", "shooting star", "evening star", "red candle", "bearish momentum", "RSI overbought", "MACD bearish", "stochastic overbought",
-        "fibonacci extension", "support broken", "key level broken", "stop loss", "liquidation", "margin call", "forced selling", "capitulation", "despair", "hopeless", "game over"
-    ]),
-    bullshit_news: normalizeKeywordList([
-        "100x", "to the moon", "guaranteed profit", "buy now or miss out", "insider info", "trust me bro", "financial advice", "not financial advice", "DYOR", "NFA",
-        "1000x", "millionaire maker", "get rich quick", "easy money", "free money", "risk-free", "guaranteed returns", "sure thing", "can't lose"
-    ]),
-    stablecoin: normalizeKeywordList(["USDT", "USDC", "BUSD", "DAI", "stablecoin", "fiat-backed", "peg", "Tether"]),
-    nft: normalizeKeywordList(["NFT", "mint", "opensea", "collection", "pfp"]),
-    defi: normalizeKeywordList(["DeFi", "staking", "yield farming", "lending", "borrowing", "DEX"]),
-    web3: normalizeKeywordList(["Web3", "dApp", "blockchain", "DAO", "metaverse"]),
-    memecoin: normalizeKeywordList([
-        "DOGE", "SHIB", "FLOKI", "PEPE", "memecoin", "meme coin", "dogecoin", "shiba inu",
-        "Dogecoin", "Shiba Inu", "Floki Inu", "Pepe", "Bonk", "BONK", "WIF", "dogwifhat", "Book of Meme", "BOME", "Myro", "MYRO", "Popcat", "POPCAT", "Cat in a dogs world", "MEW",
-        "moon", "doge", "shib", "floki", "pepe", "bonk", "wif", "bome", "myro", "popcat", "mew", "cat", "dog", "inu", "wojak", "pepe the frog", "doge the dog", "shiba", "floki inu",
-        "meme season", "meme pump", "meme rally", "meme mania", "meme frenzy", "meme craze", "meme bubble", "meme hype", "meme fomo", "meme fud", "meme shill", "meme shilling",
-        "doge army", "shib army", "pepe army", "floki army", "bonk army", "wif army", "bome army", "myro army", "popcat army", "mew army", "cat army", "dog army", "inu army",
-        "doge community", "shib community", "pepe community", "floki community", "bonk community", "wif community", "bome community", "myro community", "popcat community", "mew community",
-        "doge holders", "shib holders", "pepe holders", "floki holders", "bonk holders", "wif holders", "bome holders", "myro holders", "popcat holders", "mew holders",
-        "doge to the moon", "shib to the moon", "pepe to the moon", "floki to the moon", "bonk to the moon", "wif to the moon", "bome to the moon", "myro to the moon", "popcat to the moon", "mew to the moon",
-        "doge lambo", "shib lambo", "pepe lambo", "floki lambo", "bonk lambo", "wif lambo", "bome lambo", "myro lambo", "popcat lambo", "mew lambo",
-        "doge millionaire", "shib millionaire", "pepe millionaire", "floki millionaire", "bonk millionaire", "wif millionaire", "bome millionaire", "myro millionaire", "popcat millionaire", "mew millionaire"
-    ])
-};
-
-// === 2. Analysis Helpers ===
-const countKeywordMatches = (text, keyword) => {
-    const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = keyword.includes(" ") // phrase?
-        ? new RegExp(`${escaped}`, 'gi')
-        : new RegExp(`\\b${escaped}\\b`, 'gi');
-    return (text.match(pattern) || []).length;
-};
-
-const isNegated = (text, keyword) => {
-    const pattern = new RegExp(`\\b(?:not|never|no)\\s+${keyword}\\b`, 'i');
-    return pattern.test(text);
-};
-
-// === 3. Sentiment Rules ===
-const sentimentAnalysisRules = {
-    overallSentiment: (tweet) => {
-        const t = tweet.toLowerCase();
-        let bull = 0, bear = 0;
-        sentimentKeywords.bullish.forEach(k => { if (!isNegated(t, k)) bull += countKeywordMatches(t, k); });
-        sentimentKeywords.bearish.forEach(k => { if (!isNegated(t, k)) bear += countKeywordMatches(t, k); });
-        return bull > bear ? 'bullish' : bear > bull ? 'bearish' : 'neutral';
-    },
-
-    primaryFocus: (tweet) => {
-        const t = tweet.toLowerCase();
-        let focus = 'general crypto', max = 0;
-        for (const cat in sentimentKeywords) {
-            if (['bullish', 'bearish', 'bullshit_news'].includes(cat)) continue;
-            let matches = 0;
-            sentimentKeywords[cat].forEach(k => { matches += countKeywordMatches(t, k); });
-            if (matches > max) {
-                max = matches;
-                focus = cat;
-            }
-        }
-        return focus;
-    },
-
-    isFinancialAdvice: (tweet) => {
-        const t = tweet.toLowerCase();
-        return sentimentKeywords.bullshit_news.some(k => countKeywordMatches(t, k) > 0);
-    }
-};
-
-// === 4. Tweet Analyzer ===
-function analyzeTweets(tweets) {
-    const analysis = {
-        sentiment: { bullish: 0, bearish: 0, neutral: 0 },
-        primaryFocusCounts: {},
-        financialAdviceCount: 0,
-        overallSentiment: 'neutral',
-        primaryFocus: 'general crypto'
-    };
-
-    const priorityFocusOrder = ['memecoin', 'nft', 'defi', 'web3', 'stablecoin'];
-
-    tweets.forEach(tweet => {
-        const sentiment = sentimentAnalysisRules.overallSentiment(tweet);
-        analysis.sentiment[sentiment]++;
-
-        const focus = sentimentAnalysisRules.primaryFocus(tweet);
-        analysis.primaryFocusCounts[focus] = (analysis.primaryFocusCounts[focus] || 0) + 1;
-
-        if (sentimentAnalysisRules.isFinancialAdvice(tweet)) {
-            analysis.financialAdviceCount++;
-        }
-    });
-
-    // ✅ FIX: Compute majority-weighted sentiment
-    const total = analysis.sentiment.bullish + analysis.sentiment.bearish + analysis.sentiment.neutral;
-    if (total > 0) {
-        const bullishPct = analysis.sentiment.bullish / total;
-        const bearishPct = analysis.sentiment.bearish / total;
-
-        if (bullishPct > 0.5) analysis.overallSentiment = 'bullish';
-        else if (bearishPct > 0.5) analysis.overallSentiment = 'bearish';
-        else analysis.overallSentiment = 'neutral';
-    }
-
-    // ✅ FIX: Prioritize real category > fallback to general crypto
-    const focusEntries = Object.entries(analysis.primaryFocusCounts);
-    const sorted = focusEntries.sort((a, b) => b[1] - a[1]);
-
-    for (const [category] of sorted) {
-        if (priorityFocusOrder.includes(category)) {
-            analysis.primaryFocus = category;
-            break;
-        }
-    }
-
-    // fallback if nothing matched
-    if (analysis.primaryFocus === 'general crypto' && sorted.length > 0) {
-        analysis.primaryFocus = sorted[0][0];
-    }
-
-    return analysis;
-}
-
-// === 5. Main Function ===
+// Main analysis function with improved error handling
 async function performDeepTweetAnalysis() {
     try {
         console.log('🔍 Starting deep tweet analysis...');
-        const tweets = await extractTweetsWithScrolling();
-        console.log(`📊 Extracted ${tweets.length} tweets`);
+        const { timestampedWallets } = await extractTweetsWithScrolling();
 
-        const analysis = analyzeTweets(tweets);
-        console.log('📈 Tweet analysis completed:\n', JSON.stringify(analysis, null, 2));
+        const totalWallets = Object.values(timestampedWallets).flat().length;
+        console.log(`📊 Extracted ${totalWallets} unique wallets`);
 
-        const url = window.location.href;
-        const username = (url.match(/x\.com\/([A-Za-z0-9_]+)/) || [])[1] || '';
+        // Dummy analysis to maintain existing structure
+        const analysis = {
+            sentiment: { bullish: 0, bearish: 0, neutral: 0 },
+            primaryFocusCounts: {},
+            financialAdviceCount: 0,
+            overallSentiment: 'neutral',
+            primaryFocus: 'general crypto'
+        };
 
-        // Send tweets to background for wallet processing
-        try {
-            console.log('💰 Sending tweets to background for wallet extraction...');
-            const walletResult = await safeSendMessage({
-                type: 'PROCESS_TWEETS',
-                data: {
-                    username,
-                    tweets,
-                    timestamp: Date.now()
-                }
-            });
-            
-                         if (walletResult?.success) {
-                 const { walletsFound, datesFound } = walletResult.result;
-                 console.log(`✅ Wallet processing complete: ${walletsFound} wallets found across ${datesFound} dates`);
-             } else {
-                 console.warn('⚠️ Wallet processing failed:', walletResult?.error);
-             }
-        } catch (walletError) {
-            console.error('❌ Wallet processing error:', walletError);
-        }
-
-        // Send analysis completion message
-        await safeSendMessage({
-            type: 'TWEET_ANALYSIS_COMPLETE',
-            data: {
-                username,
-                tweets,
-                analysis,
-                timestamp: Date.now(),
-                url
-            }
-        });
-
-        return { tweets, analysis };
+        return { timestampedWallets, analysis };
     } catch (err) {
-        console.error('❌ Analysis failed:', err);
-        return null;
+        console.error('❌ Deep tweet analysis failed:', err);
+        // Provide a safe fallback
+        return {
+            timestampedWallets: {},
+            analysis: null,
+            error: err.message
+        };
     }
 }
 
 // Make functions available globally
 window.extractTweetsWithScrolling = extractTweetsWithScrolling;
-window.analyzeTweets = analyzeTweets;
 window.performDeepTweetAnalysis = performDeepTweetAnalysis;
 
 // Listen for test messages from page context

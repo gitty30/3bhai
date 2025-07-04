@@ -265,6 +265,16 @@ var e, t;
                   !0
                 );
               }
+              if (e.action === 'get_storage') {
+                chrome.storage.local.get(e.key, (result) => {
+                  if (chrome.runtime.lastError) {
+                    r({ success: false, error: chrome.runtime.lastError.message });
+                  } else {
+                    r({ success: true, data: result[e.key] });
+                  }
+                });
+                return true; // Keep the message channel open for async response
+              }
               return !1;
             }),
             chrome.runtime.onMessage.addListener((e, t, r) => {
@@ -1168,143 +1178,154 @@ Please provide general security analysis and guidance.`;
             // Cleanup cache every minute
             setInterval(cleanupMessageCache, 60000);
 
-                        // Unified message handler with deduplication and throttling
-            chrome.runtime.onMessage.addListener((e, t, r) => {
-              const messageType = e.type || e.action;
-              const messageHash = createMessageHash(e);
+            // =================================================================
+            // UNIFIED MESSAGE HANDLER
+            // =================================================================
+            chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+              const messageType = message.type || message.action;
+              const messageHash = createMessageHash(message);
               const now = Date.now();
               
-              // Report stats periodically
               reportMessageStats();
               
-              // Check for duplicate messages
               if (messageCache.has(messageHash)) {
                 const lastSeen = messageCache.get(messageHash);
                 if (now - lastSeen < MESSAGE_CACHE_DURATION) {
                   messageStats.duplicatesFiltered++;
-                  
-                  // Only log duplicates for important message types, not spam
                   if (shouldLogMessage(messageType)) {
                     console.log(`🚫 Duplicate filtered: ${messageType}`);
                   }
-                  return false; // Ignore duplicate
+                  return false;
                 }
               }
               
-              // Check for throttled message types
               if (shouldThrottleMessage(messageType)) {
                 if (messageThrottles.has(messageType)) {
                   const lastProcessed = messageThrottles.get(messageType);
                   if (now - lastProcessed < MESSAGE_THROTTLE_DURATION) {
                     messageStats.throttledMessages++;
-                    return false; // Silently ignore throttled message
+                    return false;
                   }
                 }
                 messageThrottles.set(messageType, now);
               }
               
-              // Update cache and stats
               messageCache.set(messageHash, now);
               messageStats.processedMessages++;
               
-              // Only log processing for important messages
               if (shouldLogMessage(messageType)) {
                 console.log('📬 Processing message:', messageType);
               }
               
-              switch (messageType) {
-                case "PROCESS_TWEETS":
-                  console.log('📝 Processing tweets batch for:', e.data.username);
-                processTweets(e.data).then(result => {
-                  r({ success: true, result });
-                }).catch(error => {
-                  console.error('❌ Tweet processing failed:', error);
-                  r({ success: false, error: error.toString() });
-                });
-                return true;
-                  
-                case "PROCESS_TWEETS_INCREMENTAL":
-                  console.log('📝 Processing tweets incrementally for:', e.data.username, 'Tweets:', e.data.tweets.length);
-                  processIncrementalTweets(e.data).then(result => {
-                    r({ success: true, result });
-                  }).catch(error => {
-                    console.error('❌ Incremental tweet processing failed:', error);
-                    r({ success: false, error: error.toString() });
-                  });
-                  return true;
-                  
-                case "REFRESH_SINGLE_WALLET_PNL":
-                  console.log('🔄 Refreshing PnL for single wallet:', e.walletAddress);
-                  refreshSingleWalletPnL(e.username, e.walletAddress).then(result => {
-                    r({ success: true, result });
-                  }).catch(error => {
-                    console.error('❌ Single wallet PnL refresh failed:', error);
-                    r({ success: false, error: error.toString() });
-                  });
-                  return true;
-                  
-                case "REFRESH_ALL_WALLETS_PNL":
-                  console.log('🔄 Refreshing PnL for all wallets:', e.username);
-                  refreshAllWalletsPnL(e.username).then(result => {
-                    r({ success: true, result });
-                  }).catch(error => {
-                    console.error('❌ All wallets PnL refresh failed:', error);
-                    r({ success: false, error: error.toString() });
-                  });
-                  return true;
-                  
-                case "getWalletData":
-                  console.log('📊 Getting wallet data for:', e.username);
-                  getStoredWalletData(e.username).then(result => {
-                    r({ success: true, data: result });
-                  }).catch(error => {
-                    console.error('❌ Failed to get wallet data:', error);
-                    r({ success: false, error: error.toString() });
-                  });
-                  return true;
-                  
-                case "getTokenData":
-                  console.log('🪙 Getting token data for:', e.username);
-                  getStoredTokenData(e.username).then(result => {
-                    r({ success: true, data: result });
-                  }).catch(error => {
-                    console.error('❌ Failed to get token data:', error);
-                    r({ success: false, error: error.toString() });
-                  });
-                  return true;
-                  
-                case "profileData":
-                  // Handle profile data silently (was previously causing spam)
-                  if (e.data) {
-                    r({ success: true, received: true, timestamp: now });
-                  } else {
-                    r({ success: false, error: 'No profile data provided' });
+              // Handle async responses correctly
+              (async () => {
+                try {
+                  switch (messageType) {
+                    case "PROCESS_TWEETS":
+                      const result = await processTweets(message.data);
+                      sendResponse({ success: true, result });
+                      break;
+                      
+                    case "PROFILE_DATA_EXTRACTED":
+                      const dbResult = await handleProfileData(message.data, message.timestamp, message.url, message.source);
+                      sendResponse({ success: true, ...dbResult });
+                      break;
+
+                    case "getWalletData":
+                      const walletData = await getStoredWalletData(message.username);
+                      sendResponse({ success: true, data: walletData });
+                      break;
+
+                    case "getTokenData":
+                      const tokenData = await getStoredTokenData(message.username);
+                      sendResponse({ success: true, data: tokenData });
+                      break;
+
+                    case "refreshWalletPnL":
+                      const pnlData = await refreshSingleWalletPnL(message.username, message.walletAddress);
+                      sendResponse({ success: true, pnlData });
+                      break;
+
+                    // Keep other cases from the old listeners if necessary
+                    case 'get_storage':
+                      const storageData = await new Promise(resolve => chrome.storage.local.get(message.key, resolve));
+                      sendResponse({ success: true, data: storageData[message.key] });
+                      break;
+                      
+                    default:
+                      console.log(`❓ Unknown message type received in unified handler: ${messageType}`);
+                      sendResponse({ success: false, error: 'Unknown message type' });
+                      break;
                   }
-                  return true;
-                  
-                case "scrapedData":
-                  // Handle scraped data silently (was previously causing spam)
-                  if (e.data) {
-                    r({ success: true, received: true, timestamp: now });
-                  } else {
-                    r({ success: false, error: 'No scraped data provided' });
-                  }
-                  return true;
-                  
-                case "DEBUG_MESSAGE":
-                console.log('🔧 Debug message received in background:', e);
-                  r({ success: true, received: true, timestamp: now });
-                return true;
-                  
-                default:
-                  // Log unknown message types for debugging
-                  console.log(`❓ Unknown message type: ${messageType}`);
-                  return false;
-              }
+                } catch (error) {
+                  console.error(`❌ Error in unified handler for ${messageType}:`, error);
+                  sendResponse({ success: false, error: error.toString() });
+                }
+              })();
+
+              return true; // Keep message channel open for async response
             });
-            
-            console.log('✅ Message handler active: Silent filtering enabled for spam types (profileData, scrapedData)');
-            
+
+            async function handleProfileData(data, timestamp, url, source) {
+              console.log('📨 Received intercepted profile data in background script!');
+              console.log('Data:', data);
+              // ... (rest of the logic from the old PROFILE_DATA_EXTRACTED listener)
+
+              // Store locally
+              await chrome.storage.local.set({
+                [`profile_data_${data.username}`]: { data, timestamp, url, source }
+              });
+              console.log('✅ Profile data stored locally for', data.username);
+
+              // Send to database
+              try {
+                const CHANGE_URL = 'http://localhost:3000/save';
+                const apiData = { /* ... map data ... */ id: data.id, username: data.username, name: data.name, created_at: data.created_at, followers: parseInt(data.followers) || 0, friends: parseInt(data.friends) || 0, statuses: parseInt(data.statuses) || 0, media: parseInt(data.media) || 0, verified: Boolean(data.verified), blue_verified: Boolean(data.blue_verified), phone_verified: Boolean(data.phone_verified), identity_verified: Boolean(data.identity_verified), tipjar_enabled: Boolean(data.tipjar_enabled), subscriptions: parseInt(data.subscriptions) || 0, profile_url: data.profile_url, banner_url: data.banner_url, website: data.website, birthdate: data.birthdate, ffr: parseInt(data.ffr) || 0, affiliation: data.affiliation, business_label: Boolean(data.business_label), creator_subscriptions: parseInt(data.creator_subscriptions) || 0, suspicious_flags: data.suspicious_flags || [], username_switches: 1 };
+                const response = await fetch(CHANGE_URL, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(apiData)
+                });
+                if (response.ok) {
+                  const result = await response.text();
+                  return { databaseResult: result };
+                } else {
+                  const errorText = await response.text();
+                  return { databaseError: `HTTP ${response.status}: ${errorText}` };
+                }
+              } catch (dbError) {
+                return { databaseError: dbError.toString() };
+              }
+            }
+
+            async function fetchNativeBalance(wallet) {
+                let t = {
+                  name: "nativeBalances",
+                  data: { walletAddresses: [wallet], chainIds: [1399811149] },
+                };
+                const response = await fetch("https://api-neo.bullx.io/v2/api/nativeBalances", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+                  },
+                  body: JSON.stringify(t),
+                });
+                if (!response.ok) throw Error(`HTTP error ${response.status}`);
+                const data = await response.json();
+                let o = data.nativeBalances?.[wallet]?.["1399811149"];
+                if (o == null) throw new Error("Balance not found in response.");
+                return o / 1e9;
+            }
+
+            async function fetchRepoHealth(repo) {
+                const response = await fetch(`https://www.uxento.io/api/health?repo=${encodeURIComponent(repo)}`);
+                if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+                return response.json();
+            }
+
+            console.log('✅ Unified message handler is now active.');
+
             // Global tracking to prevent duplicates and manage API requests
             let processedWallets = new Set(); // Track processed wallets globally
             let apiRequestQueue = []; // Queue for API requests
@@ -1341,54 +1362,31 @@ Please provide general security analysis and guidance.`;
             
             // Comprehensive status logging
             function logStatus() {
-              const now = Date.now();
-              const cacheSize = messageCache.size;
-              const throttleSize = messageThrottles.size;
-              
-              console.log(`📊 System Status Report:`);
-              console.log(`   🎯 API: ${processedWallets.size} items processed, last request ${now - lastRequestTime}ms ago`);
-              console.log(`   📬 Messages: ${cacheSize} cached, ${throttleSize} active throttles`);
-              
-              // Show current filtering stats if significant
-              if (messageStats.duplicatesFiltered > 0 || messageStats.throttledMessages > 0) {
-                console.log(`   🔧 Recent filtering: ${messageStats.duplicatesFiltered} duplicates, ${messageStats.throttledMessages} throttled`);
-              }
+              console.log(`- Message cache size: ${Object.keys(messageCache).length}`);
+              console.log(`- Processed wallets set size: ${processedWallets.size}`);
             }
-            
-            // Log status every 2 minutes
-            setInterval(logStatus, 2 * 60 * 1000);
-            
-            // Solana address validation (browser-compatible version)
+
             async function isValidSolanaWalletAddress(address) {
               try {
-                // Basic validation first
-                if (!address || typeof address !== 'string') return false;
-                if (address.length < 32 || address.length > 44) return false;
-                if (!/^[1-9A-HJ-NP-Za-km-z]+$/.test(address)) return false;
-                
-                // For browser environment, we'll use a simplified validation
-                // This checks if the address is likely on the ed25519 curve
-                // by attempting base58 decode and checking length
-                try {
-                  const decoded = base58Decode(address);
-                  if (decoded.length !== 32) return false;
-                  
-                  // Additional heuristic: wallet addresses are typically on curve
-                  // Token addresses (PDAs) are typically NOT on curve
-                  // We'll use a probabilistic approach for now
-                  return true;
-                } catch (e) {
+                // First, do a basic format validation
+                if (!validateSolanaAddress(address)) {
                   return false;
                 }
+                
+                // Attempt to fetch PnL. If it fails with "Invalid Trader Address", it's a CA.
+                await fetchWalletPnL(address);
+                return true; // If it succeeds, it's a wallet
               } catch (error) {
-                console.error(`Error validating address ${address}:`, error.message);
-                return false;
+                if (error.message && error.message.includes('Invalid Trader Address')) {
+                  return false; // This is a CA
+                }
+                // For other errors, we can assume it's a wallet but failed for another reason
+                return true; 
               }
             }
 
-            // Simple base58 decoder for browser
             function base58Decode(str) {
-              const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+              const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
               let decoded = 0n;
               let multi = 1n;
               
@@ -1473,10 +1471,12 @@ Please provide general security analysis and guidance.`;
             }
 
             // Enhanced tweet processing with wallet/token bifurcation and deduplication
-            async function processTweets({ username, tweets, timestamp }) {
-              console.log(`📊 Processing ${tweets.length} tweets for @${username}`);
+            async function processTweets({ username, timestampedWallets, timestamp }) {
+              const walletsFound = Object.values(timestampedWallets).flat().length;
+              console.log(`📊 Processing ${walletsFound} wallets for @${username}`);
+
               // Check if we're already processing this data to prevent duplicates
-              const dataHash = `${username}_${tweets.length}_${timestamp}`;
+              const dataHash = `${username}_${walletsFound}_${timestamp}`;
               if (processedWallets.has(dataHash)) {
                 console.log(`⚠️ Duplicate processing detected for ${username}, skipping`);
                 return { 
@@ -1487,112 +1487,115 @@ Please provide general security analysis and guidance.`;
                 };
               }
               processedWallets.add(dataHash);
-              const PATTERNS = {
-                solanaAddress: /\b[1-9A-HJ-NP-Za-km-z]{32,44}\b/g,
-                tweetDate: /·\s*(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}(?:,\s+\d{4})?|\d{1,2}[hdsm])/i
-              };
+
               const walletMap = {};  // For wallet addresses
               const tokenMap = {};   // For token/CA addresses
-              let processedCount = 0;
-              // --- NEW: Track batch addresses ---
+              
               const batchWalletAddresses = new Set();
               const batchTokenAddresses = new Set();
-              // --- END NEW ---
-              for (const tweet of tweets) {
+              const analysisPromises = []; // To track all analysis promises
+
+              for (const [epochTimestamp, wallets] of Object.entries(timestampedWallets)) {
                  try {
-                   // Log the tweet content
-                   console.log('🐦 Tweet content:', tweet);
-                   // Extract date from tweet
-                   const dateMatch = tweet.match(PATTERNS.tweetDate);
-                  console.log(`🔍 Date match for tweet:`, dateMatch);
-                  if (!dateMatch) {
-                    console.log('❌ No date match found, skipping tweet');
-                    continue;
-                  }
-                   const dateStr = dateMatch[0].replace('·', '').trim();
-                  console.log(`📅 Extracted date string: "${dateStr}"`);
-                   const date = parseTweetDate(dateStr);
-                  console.log(`📅 Parsed date: "${date}"`);
-                  if (!date) {
-                    console.log('❌ Date parsing failed, skipping tweet');
-                    continue;
-                  }
-                  // Extract addresses
-                  const addressMatches = tweet.match(PATTERNS.solanaAddress);
-                  console.log(`🔍 Address matches found:`, addressMatches);
-                  if (!addressMatches) {
-                    console.log('❌ No addresses found in tweet');
-                    continue;
-                  }
+                   const date = new Date(parseInt(epochTimestamp, 10)).toISOString().split('T')[0];
+
                   // Process each address
-                  for (const address of addressMatches) {
-                    console.log(`🔍 Processing address: ${address}`);
-                    // --- REMOVED: processedWallets check here ---
-                    if (!validateSolanaAddress(address)) {
-                      console.log(`❌ Address validation failed for: ${address}`);
-                      continue;
-                    }
-                    console.log(`✅ Address validated: ${address}`);
-                    // Determine if it's a wallet or token address
-                    const isWallet = await isValidSolanaWalletAddress(address);
-                    console.log(`🔍 Address classification for ${address}: ${isWallet ? 'WALLET' : 'TOKEN'}`);
-                    if (isWallet) {
-                      // It's a wallet address
-                      if (!walletMap[date]) walletMap[date] = [];
-                      if (!walletMap[date].includes(address)) {
-                        walletMap[date].push(address);
-                        batchWalletAddresses.add(address); // Track for this batch
-                        console.log(`👛 Added wallet for ${date}: ${address}`);
-                      } else {
-                        console.log(`⚠️ Wallet already exists for ${date}: ${address}`);
+                  for (const address of wallets) {
+                    const analysisPromise = (async () => {
+                      console.log(`🔍 Processing address: ${address}`);
+                      
+                      if (!validateSolanaAddress(address)) {
+                        console.log(`❌ Address validation failed for: ${address}`);
+                        return;
                       }
-                    } else {
-                      // It's a token/CA address
-                      if (!tokenMap[date]) tokenMap[date] = [];
-                      const tokenEntry = {
-                        address: address,
-                        tweetText: tweet.substring(0, 200) + (tweet.length > 200 ? '...' : ''),
-                        date: date
-                      };
-                      // Check if this token is already stored for this date
-                      const exists = tokenMap[date].some(t => t.address === address);
-                      if (!exists) {
-                        tokenMap[date].push(tokenEntry);
-                        batchTokenAddresses.add(address); // Track for this batch
-                        console.log(`🪙 Added token for ${date}: ${address}`);
+                      console.log(`✅ Address validated: ${address}`);
+
+                      // Determine if it's a wallet or token address
+                      const isWallet = await isValidSolanaWalletAddress(address);
+                      console.log(`🔍 Address classification for ${address}: ${isWallet ? 'WALLET' : 'TOKEN'}`);
+                      
+                      if (isWallet) {
+                        // It's a wallet address
+                        if (!walletMap[date]) walletMap[date] = [];
+                        if (!walletMap[date].includes(address)) {
+                          walletMap[date].push(address);
+                          batchWalletAddresses.add(address); // Track for this batch
+                          console.log(`👛 Added wallet for ${date}: ${address}`);
+                        } else {
+                          console.log(`⚠️ Wallet already exists for ${date}: ${address}`);
+                        }
                       } else {
-                        console.log(`⚠️ Token already exists for ${date}: ${address}`);
+                        // It's a token/CA address
+                        console.log(`🪙 CA Found: ${address}. Fetching overview...`);
+                        const overview = await fetchCaOverview(address);
+                        console.log(`overview for ${address}`, overview);
+                        if (!overview || !overview.token_id || !overview.is_pump) {
+                          console.log(`❌ Overview fetch failed for ${address}.`);
+                          if (!tokenMap[date]) tokenMap[date] = [];
+                          tokenMap[date].push({ 
+                            address, 
+                            isValid: false, 
+                            error: 'Failed to fetch token overview. The address may be invalid or the API is unavailable.' 
+                          });
+                        } else {
+                          console.log(`📈 Overview for ${address} successful. Fetching price history...`);
+                          const history = await fetchCaPriceHistory(overview.token_id, overview.is_pump, epochTimestamp);
+                          console.log(`history for ${address}`, history);
+                          if (history && history.length > 0) {
+                            console.log(`📊 History for ${address} successful. Calculating PnL...`);
+                            console.log(`history for ${address}`, history);
+                            if (!tokenMap[date]) tokenMap[date] = [];
+                            tokenMap[date].push({
+                              address: address,
+                              pnl: history,
+                              isValid: true,
+                              is_pump: overview.is_pump,
+                              timestamp: epochTimestamp
+                            });
+                            console.log(`✅ PnL for CA ${address} calculated and stored.`);
+                          } else {
+                            console.log(`❌ History fetch failed for ${address}.`);
+                            if (!tokenMap[date]) tokenMap[date] = [];
+                            tokenMap[date].push({ 
+                              address, 
+                              isValid: false, 
+                              error: 'Failed to fetch price history.' 
+                            });
+                          }
+                        }
                       }
-                    }
-                    processedCount++;
+                    })();
+                    analysisPromises.push(analysisPromise);
                    }
                  } catch (error) {
-                   console.warn('⚠️ Error processing tweet:', error);
+                   console.warn('⚠️ Error processing wallet entry:', error);
                  }
                }
-              // --- NEW: After processing, update global set ---
+
+              await Promise.all(analysisPromises);
+              console.log('✅ All addresses processed.');
+
               for (const address of batchWalletAddresses) {
                 processedWallets.add(address);
               }
               for (const address of batchTokenAddresses) {
                 processedWallets.add(address);
               }
-              // --- END NEW ---
+
               // Calculate totals
               const totalWalletDates = Object.keys(walletMap).length;
                const totalWallets = Object.values(walletMap).reduce((sum, wallets) => sum + wallets.length, 0);
               const totalTokenDates = Object.keys(tokenMap).length;
               const totalTokens = Object.values(tokenMap).reduce((sum, tokens) => sum + tokens.length, 0);
+
               console.log(`✅ Processed ${totalWallets} wallet addresses across ${totalWalletDates} dates for @${username}`);
               console.log(`✅ Processed ${totalTokens} token addresses across ${totalTokenDates} dates for @${username}`);
+              
               // Store wallet data
               if (totalWalletDates > 0) {
                 try {
-                  // fetchPnLForWallets now handles database updates for valid wallets only
-                  // Store locally with PnL data (with streaming support)
                   const walletsWithPnL = await fetchPnLForWallets(walletMap, username, (eventType, user, date, wallet, status, data) => {
                     console.log(`📈 PnL Progress: ${eventType} - ${wallet} - ${status}`);
-                    // Send real-time updates to popup if it's listening
                     try {
                       chrome.runtime.sendMessage({
                         type: 'PNL_PROGRESS_UPDATE',
@@ -2612,6 +2615,139 @@ Please provide general security analysis and guidance.`;
                 throw error;
               }
             }
+
+            async function fetchCaOverview(address) {
+              const url = `https://api.autosnipe.ai/sniper-api/token/overview?token_address=${address}`;
+              try {
+                const response = await fetch(url, {
+                  headers: { "accept": "*/*" }
+                });
+                if (!response.ok) return null;
+                const data = await response.json();
+                if (data.status === 1 && data.data) {
+                  return data.data;
+                }
+                return null;
+              } catch (error) {
+                console.error(`Failed to fetch CA overview for ${address}:`, error);
+                return null;
+              }
+            }
+
+            async function fetchCaPriceHistory(tokenId, isPump, epochTimestamp) {
+              try {
+                const beforeTimestamp = Math.floor(epochTimestamp / 1000) + (24 * 60 * 60); // 24 hours after tweet
+                const response = await fetch(`https://api.autosnipe.ai/sniper-api/token/priceHistory2?token_id=${tokenId}&is_pump=${isPump}&before=${beforeTimestamp}&count=50&type=1h&currency=USD`);
+                
+                if (!response.ok) {
+                  console.error(`Price history fetch failed for token ${tokenId}`);
+                  return null;
+                }
+                
+                const data = await response.json();
+                
+                // Validate response structure
+                if (!data || data.status !== 1 || !data.data || 
+                    !data.data.t || !data.data.o || !data.data.h || 
+                    !data.data.l || !data.data.c || !data.data.v) {
+                  console.error(`Invalid price history data for token ${tokenId}`, data);
+                  return null;
+                }
+                
+                // Process price data
+                const processedPnL = data.data.t.map((timestamp, index) => ({
+                  time: new Date(timestamp * 1000).toLocaleTimeString(),
+                  open: data.data.o[index],
+                  high: data.data.h[index],
+                  low: data.data.l[index],
+                  close: data.data.c[index],
+                  volume: data.data.v[index],
+                  gainLoss: calculateGainLoss(data.data.o[index], data.data.c[index]),
+                  percentage: calculatePercentageChange(data.data.o[index], data.data.c[index])
+                }));
+                
+                return processedPnL;
+              } catch (error) {
+                console.error('Price history fetch error:', error);
+                return null;
+              }
+            }
+
+            // Helper functions for PnL calculation
+            function calculateGainLoss(open, close) {
+              if (open === 0) return '0';
+              const gainLoss = close / open;
+              return gainLoss.toFixed(2);
+            }
+
+            function calculatePercentageChange(open, close) {
+              if (open === 0) return '0%';
+              const percentageChange = ((close - open) / open) * 100;
+              return `${percentageChange.toFixed(2)}%`;
+            }
+
+            function findClosestTimeIndex(targetTimestamp, timeArray) {
+              if (!timeArray || timeArray.length === 0) {
+                return -1;
+              }
+
+              // Convert target from ms to seconds for comparison
+              const targetTimeInSeconds = targetTimestamp / 1000;
+              
+              let closestIndex = -1;
+              let minDiff = Infinity;
+
+              for (let i = 0; i < timeArray.length; i++) {
+                const diff = Math.abs(timeArray[i] - targetTimeInSeconds);
+                if (diff < minDiff) {
+                  minDiff = diff;
+                  closestIndex = i;
+                }
+              }
+              return closestIndex;
+            }
+
+            function calculateCaPnl(caTimestamp, history) {
+              const { h: prices, t: timestamps } = history;
+              if (!prices || !timestamps || prices.length === 0 || timestamps.length === 0) {
+                return [];
+              }
+
+              const startIndex = findClosestTimeIndex(caTimestamp, timestamps);
+              if (startIndex === -1) {
+                return [];
+              }
+
+              const initialPrice = prices[startIndex];
+              const pnlData = [];
+              let hourCounter = 1;
+
+              // Iterate from the point of the tweet onwards
+              for (let i = startIndex + 1; i < prices.length; i++) {
+                const currentPrice = prices[i];
+                const gainLoss = ((currentPrice - initialPrice) / initialPrice);
+                const percentage = (gainLoss * 100).toFixed(2);
+
+                pnlData.push({
+                  time: `${hourCounter}h`,
+                  gainLoss: gainLoss.toFixed(4),
+                  percentage: `${percentage}%`
+                });
+                hourCounter++;
+              }
+
+              return pnlData;
+            }
+
+            chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+              if (message.action === 'get_storage') {
+                chrome.storage.local.get(message.key, (result) => {
+                  sendResponse({ data: result[message.key] });
+                });
+                return true; // Keep the message channel open for async response
+              }
+              // ... other listeners
+            });
         },
         { "@parcel/transformer-js/src/esmodule-helpers.js": "hbR2Q" },
       ],
