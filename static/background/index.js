@@ -1188,16 +1188,16 @@ Please provide general security analysis and guidance.`;
               
               reportMessageStats();
               
-              if (messageCache.has(messageHash)) {
-                const lastSeen = messageCache.get(messageHash);
-                if (now - lastSeen < MESSAGE_CACHE_DURATION) {
-                  messageStats.duplicatesFiltered++;
-                  if (shouldLogMessage(messageType)) {
-                    console.log(`🚫 Duplicate filtered: ${messageType}`);
-                  }
-                  return false;
-                }
-              }
+              // if (messageCache.has(messageHash)) {
+              //   const lastSeen = messageCache.get(messageHash);
+              //   if (now - lastSeen < MESSAGE_CACHE_DURATION) {
+              //     messageStats.duplicatesFiltered++;
+              //     if (shouldLogMessage(messageType)) {
+              //       console.log(`🚫 Duplicate filtered: ${messageType}`);
+              //     }
+              //     return false;
+              //   }
+              // }
               
               if (shouldThrottleMessage(messageType)) {
                 if (messageThrottles.has(messageType)) {
@@ -1238,6 +1238,7 @@ Please provide general security analysis and guidance.`;
 
                     case "getTokenData":
                       const tokenData = await getStoredTokenData(message.username);
+                      console.log("token DATA - ", tokenData);
                       sendResponse({ success: true, data: tokenData });
                       break;
 
@@ -1529,7 +1530,7 @@ Please provide general security analysis and guidance.`;
                         console.log(`🪙 CA Found: ${address}. Fetching overview...`);
                         const overview = await fetchCaOverview(address);
                         console.log(`overview for ${address}`, overview);
-                        if (!overview || !overview.token_id || !overview.is_pump) {
+                        if (!overview.token_id || !overview.is_pump) {
                           console.log(`❌ Overview fetch failed for ${address}.`);
                           if (!tokenMap[date]) tokenMap[date] = [];
                           tokenMap[date].push({ 
@@ -1541,14 +1542,13 @@ Please provide general security analysis and guidance.`;
                           console.log(`📈 Overview for ${address} successful. Fetching price history...`);
                           const history = await fetchCaPriceHistory(overview.token_id, overview.is_pump, epochTimestamp);
                           console.log(`history for ${address}`, history);
-                          if (history && history.length > 0) {
+                          if (history && history.isValid && history.pnl.length > 0) {
                             console.log(`📊 History for ${address} successful. Calculating PnL...`);
-                            console.log(`history for ${address}`, history);
                             if (!tokenMap[date]) tokenMap[date] = [];
                             tokenMap[date].push({
                               address: address,
-                              pnl: history,
-                              isValid: true,
+                              pnl: history.pnl,
+                              isValid: history.isValid,
                               is_pump: overview.is_pump,
                               timestamp: epochTimestamp
                             });
@@ -1559,7 +1559,7 @@ Please provide general security analysis and guidance.`;
                             tokenMap[date].push({ 
                               address, 
                               isValid: false, 
-                              error: 'Failed to fetch price history.' 
+                              error: 'Failed to fetch price history or no PnL data available.' 
                             });
                           }
                         }
@@ -2202,11 +2202,44 @@ Please provide general security analysis and guidance.`;
 
             async function getStoredTokenData(username) {
               try {
+                if (!username) {
+                  console.error('❌ No username provided to getStoredTokenData');
+                  return { success: false, error: 'Username required' };
+                }
+                console.log("username ye hai dekh -> ", username);
                 const result = await chrome.storage.local.get([`token_list_${username}`]);
-                return result[`token_list_${username}`] || null;
+                console.log("result ye hai dekh -> ", result);
+                const tokenData = result[`token_list_${username}`];
+                
+                // Validate the token data structure
+                if (!tokenData) {
+                  console.log(`No token data found for ${username}`);
+                  return {
+                    success: false,
+                    error: 'No token data found'
+                  };
+                }
+
+                // Ensure we have the expected data structure
+                if (!tokenData.data || typeof tokenData.data !== 'object') {
+                  console.error('❌ Invalid token data structure:', tokenData);
+                  return {
+                    success: false,
+                    error: 'Invalid token data structure'
+                  };
+                }
+
+                // Return in the same format as wallet data
+                return {
+                  success: true,
+                  data: tokenData
+                };
               } catch (error) {
                 console.error('❌ Failed to get stored token data:', error);
-                throw error;
+                return {
+                  success: false,
+                  error: error.message
+                };
               }
             }
 
@@ -2634,110 +2667,100 @@ Please provide general security analysis and guidance.`;
               }
             }
 
-            async function fetchCaPriceHistory(tokenId, isPump, epochTimestamp) {
+            async function fetchCaPriceHistory(tokenId, isPump, tweetTimestamp) {
               try {
-                const beforeTimestamp = Math.floor(epochTimestamp / 1000) + (24 * 60 * 60); // 24 hours after tweet
-                const response = await fetch(`https://api.autosnipe.ai/sniper-api/token/priceHistory2?token_id=${tokenId}&is_pump=${isPump}&before=${beforeTimestamp}&count=50&type=1h&currency=USD`);
-                
+                const nowSec = Math.floor(Date.now() / 1000);
+                const tweetSec = Math.floor(tweetTimestamp / 1000);
+                const before = Math.min(tweetSec + 86400, nowSec); // max 24h after tweet, capped to now
+            
+                const url = `https://api.autosnipe.ai/sniper-api/token/priceHistory2?token_id=${tokenId}&is_pump=${isPump}&before=${before}&count=50&type=1h&currency=USD`;
+                const response = await fetch(url);
+            
                 if (!response.ok) {
-                  console.error(`Price history fetch failed for token ${tokenId}`);
-                  return null;
+                  console.error(`❌ Failed to fetch price history for token ${tokenId}`);
+                  return { isValid: false, pnl: [] };
                 }
-                
-                const data = await response.json();
-                
-                // Validate response structure
-                if (!data || data.status !== 1 || !data.data || 
-                    !data.data.t || !data.data.o || !data.data.h || 
-                    !data.data.l || !data.data.c || !data.data.v) {
-                  console.error(`Invalid price history data for token ${tokenId}`, data);
-                  return null;
+            
+                const result = await response.json();
+                const history = result.data;
+            
+                // Validate structure
+                if (result.status !== 1 ) {
+                  console.warn(`⚠️ Invalid or empty data for token ${tokenId}`);
+                  return { isValid: false, pnl: [] };
                 }
-                
-                // Process price data
-                const processedPnL = data.data.t.map((timestamp, index) => ({
-                  time: new Date(timestamp * 1000).toLocaleTimeString(),
-                  open: data.data.o[index],
-                  high: data.data.h[index],
-                  low: data.data.l[index],
-                  close: data.data.c[index],
-                  volume: data.data.v[index],
-                  gainLoss: calculateGainLoss(data.data.o[index], data.data.c[index]),
-                  percentage: calculatePercentageChange(data.data.o[index], data.data.c[index])
-                }));
-                
-                return processedPnL;
+            
+                const pnl = calculateCaPnl(tweetTimestamp, history);
+                return { isValid: pnl.length > 0, pnl };
+            
               } catch (error) {
-                console.error('Price history fetch error:', error);
-                return null;
+                console.error('🚨 Price history fetch error:', error);
+                return { isValid: false, pnl: [] };
               }
             }
+            
 
             // Helper functions for PnL calculation
             function calculateGainLoss(open, close) {
-              if (open === 0) return '0';
-              const gainLoss = close / open;
-              return gainLoss.toFixed(2);
+              if (!open || open === 0) return '0.00';
+              return (close / open).toFixed(2);
             }
-
+            
             function calculatePercentageChange(open, close) {
-              if (open === 0) return '0%';
-              const percentageChange = ((close - open) / open) * 100;
-              return `${percentageChange.toFixed(2)}%`;
+              if (!open || open === 0) return '0.00%';
+              const percentage = ((close - open) / open) * 100;
+              return `${percentage.toFixed(2)}%`;
             }
 
             function findClosestTimeIndex(targetTimestamp, timeArray) {
-              if (!timeArray || timeArray.length === 0) {
-                return -1;
-              }
-
-              // Convert target from ms to seconds for comparison
-              const targetTimeInSeconds = targetTimestamp / 1000;
-              
+              if (!Array.isArray(timeArray) || timeArray.length === 0) return -1;
+            
+              const targetSec = Math.floor(targetTimestamp / 1000);
               let closestIndex = -1;
               let minDiff = Infinity;
-
+            
               for (let i = 0; i < timeArray.length; i++) {
-                const diff = Math.abs(timeArray[i] - targetTimeInSeconds);
+                const diff = Math.abs(timeArray[i] - targetSec);
                 if (diff < minDiff) {
                   minDiff = diff;
                   closestIndex = i;
                 }
               }
+            
               return closestIndex;
             }
+            
 
-            function calculateCaPnl(caTimestamp, history) {
-              const { h: prices, t: timestamps } = history;
-              if (!prices || !timestamps || prices.length === 0 || timestamps.length === 0) {
-                return [];
-              }
-
-              const startIndex = findClosestTimeIndex(caTimestamp, timestamps);
-              if (startIndex === -1) {
-                return [];
-              }
-
-              const initialPrice = prices[startIndex];
-              const pnlData = [];
-              let hourCounter = 1;
-
-              // Iterate from the point of the tweet onwards
-              for (let i = startIndex + 1; i < prices.length; i++) {
-                const currentPrice = prices[i];
-                const gainLoss = ((currentPrice - initialPrice) / initialPrice);
-                const percentage = (gainLoss * 100).toFixed(2);
-
-                pnlData.push({
-                  time: `${hourCounter}h`,
-                  gainLoss: gainLoss.toFixed(4),
-                  percentage: `${percentage}%`
+            function calculateCaPnl(tweetTimestamp, history) {
+              const { t: timestamps, o, h, l, c, v } = history;
+            
+              const baseIndex = findClosestTimeIndex(tweetTimestamp, timestamps);
+              if (baseIndex === -1 || !o[baseIndex]) return [];
+            
+              const baseOpen = h[baseIndex];
+              const deltas = [1, 3, 6, 12, 24];
+              const pnl = [];
+            
+              for (let hr of deltas) {
+                const i = baseIndex + hr;
+                if (i >= c.length) break;
+            
+                pnl.push({
+                  time: `${hr}h`,
+                  open: o[i],
+                  close: c[i],
+                  high: h[i],
+                  low: l[i],
+                  volume: v[i],
+                  gainLoss: calculateGainLoss(baseOpen, h[i]),
+                  percentage: calculatePercentageChange(baseOpen, h[i]),
+                  timestamp: timestamps[i]
                 });
-                hourCounter++;
               }
-
-              return pnlData;
+            
+              return pnl;
             }
+            
 
             chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               if (message.action === 'get_storage') {

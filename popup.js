@@ -1257,38 +1257,41 @@ async function initializeWalletTokenData() {
     // Load wallet data
     await loadWalletData(username);
     
+    await loadTokenData(username);
     // Load token data - try multiple times if needed
-    let tokenDataLoaded = false;
-    for (let i = 0; i < 3; i++) {
-      try {
-        const response = await safeSendMessage({
-          action: 'getTokenData',
-          username: username
-        });
-        console.log('[POPUP] getTokenData response:', response);
-        if (response && response.success && response.data) {
-          console.log('[POPUP] Token data loaded:', response.data);
-          currentTokenData = response.data;
-          displayTokenData(response.data);
-          tokenDataLoaded = true;
-          break;
-        }
-      } catch (error) {
-        console.log(`[POPUP] Attempt ${i + 1} to load token data failed:`, error);
-      }
+    // let tokenDataLoaded = false;
+    // for (let i = 0; i < 8; i++) {
+    //   console.log("i ye hai dekh -> ", i)
+    //   try {
+    //     const response = await safeSendMessage({
+    //       action: 'getTokenData',
+    //       username: username
+    //     });
+    //     console.log("ANSWER AAGYA ye hai dekh -> ", response)
+    //     console.log('[POPUP] getTokenData response:', response);
+    //     if (response && response.data) {
+    //       console.log('[POPUP] Token data loaded:', response.data);
+    //       currentTokenData = response.data;
+    //       displayTokenData(response.data);
+    //       tokenDataLoaded = true;
+    //       break;
+    //     }
+    //   } catch (error) {
+    //     console.log(`[POPUP] Attempt ${i + 1} to load token data failed:`, error);
+    //   }
       
-      if (!tokenDataLoaded && i < 2) {
-        // Wait a bit before retrying
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-    }
+    //   if (!tokenDataLoaded && i < 2) {
+    //     // Wait a bit before retrying
+    //     await new Promise(resolve => setTimeout(resolve, 500));
+    //   }
+    // }
     
-    if (!tokenDataLoaded) {
-      console.log('[POPUP] No token data found after retries');
-      displayNoTokenData();
-    }
+    // if (!tokenDataLoaded) {
+    //   console.log('[POPUP] No token data found after retries');
+    //   displayNoTokenData();
+    // }
   } else {
-    console.log('🤷 No username found, displaying default state.');
+    console.log('🤷 No username found, displaying default state. !!!!!!!!!!!!!');
     displayNoWalletData();
     displayNoTokenData();
   }
@@ -1361,26 +1364,72 @@ async function loadWalletData(username) {
 }
 
 // Load token data for a username
-async function loadTokenData(username) {
-  console.log('[POPUP] Loading token data for:', username);
+async function loadTokenData(username, retryCount = 0) {
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 1000; // 1 second delay between retries
+  
+  console.log(`[POPUP] Loading token data for: ${username} (attempt ${retryCount + 1}/${MAX_RETRIES})`);
   
   try {
+    const cachedTokenData = await chrome.storage.local.get(`token_list_${username}`);
+    const tokenObject = cachedTokenData[`token_list_${username}`];
+
+    if (tokenObject && tokenObject.data) {
+      currentTokenData = tokenObject;
+      displayTokenData(tokenObject);  // ✅ correct extraction
+      console.log('[POPUP] Token data loaded from cache:', tokenObject);
+      return;
+    }
+
     const response = await safeSendMessage({
       action: 'getTokenData',
       username: username
     });
-    
-    if (response && response.success && response.data) {
-      currentTokenData = response.data;
-      displayTokenData(response.data);
+    console.log('[POPUP] Token data response:', response);
+
+    // Check if we have an error response
+    if (!response || !response.success) {
+      const errorMsg = response?.error || 'Failed to load token data';
+      console.log(`[POPUP] Token data error on attempt ${retryCount + 1}:`, errorMsg);
+      
+      // If we haven't reached max retries, try again
+      if (retryCount < MAX_RETRIES - 1) {
+        console.log(`[POPUP] Retrying in ${RETRY_DELAY}ms...`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        return loadTokenData(username, retryCount + 1);
+      }
+      
+      // If we've exhausted all retries, show error
+      console.error('[POPUP] Token data error after all retries:', errorMsg);
+      displayTokenError(errorMsg);
+      return;
+    }
+
+    // Check if we have valid data
+    if (response.data && response.data.data) {
+      currentTokenData = response.data;  // Store just the data portion
+      displayTokenData(response.data);   // Pass just the data portion
       console.log('[POPUP] Token data loaded:', response.data);
+    } else if (retryCount < MAX_RETRIES - 1) {
+      // If no data but retries remaining, try again
+      console.log(`[POPUP] No data yet, retrying in ${RETRY_DELAY}ms... (attempt ${retryCount + 1})`);
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+      return loadTokenData(username, retryCount + 1);
     } else {
-      console.log('[POPUP] No token data found for:', username);
+      console.log('[POPUP] No token data found after all retries for:', username);
       displayNoTokenData();
     }
   } catch (error) {
-    console.error('[POPUP] Error loading token data:', error);
-    displayTokenError(error.message);
+    console.error(`[POPUP] Error loading token data (attempt ${retryCount + 1}):`, error);
+    
+    // Retry on error if attempts remain
+    if (retryCount < MAX_RETRIES - 1) {
+      console.log(`[POPUP] Retrying after error in ${RETRY_DELAY}ms...`);
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+      return loadTokenData(username, retryCount + 1);
+    } else {
+      displayTokenError(error.message);
+    }
   }
 }
 
@@ -1834,16 +1883,19 @@ function displayTokenData(tokenData) {
   // Clear previous results
   caTableContainer.innerHTML = '';
 
-  // Parse token map
-  let tokenMap = tokenData?.data;
-  if (!tokenMap && tokenData && typeof tokenData === 'object' && !Array.isArray(tokenData)) {
-    const keys = Object.keys(tokenData);
-    if (keys.length > 0 && Array.isArray(tokenData[keys[0]])) {
-      tokenMap = tokenData;
-      console.warn('Token data did not have a .data property, using root object as tokenMap');
-    }
-  }
+   // Parse token map
+   let tokenMap = tokenData?.data;
 
+// Fallback: tokenData is the tokenMap itself
+if (!tokenMap && tokenData && typeof tokenData === 'object') {
+  const maybeDates = Object.keys(tokenData);
+  const isDateKeyedMap = maybeDates.length > 0 && maybeDates.every(k => Array.isArray(tokenData[k]));
+  if (isDateKeyedMap) {
+    tokenMap = tokenData;
+    console.warn('⚠️ tokenData did not have a .data property; using root object as tokenMap');
+  }
+}
+ 
   console.log("tokenMap:", tokenMap);
 
   // Handle empty or invalid data
@@ -2287,33 +2339,32 @@ async function init() {
     if (namespace === 'local') {
       const username = await getCurrentUsername();
       if (!username) return;
-
+  
       const tokenStorageKey = `token_list_${username}`;
       const walletStorageKey = `wallet_list_${username}`;
-
+  
       if (changes[tokenStorageKey]) {
+        const newTokenData = changes[tokenStorageKey].newValue;
         console.log('Detected change in token data, reloading...');
-        const newStorageData = changes[tokenStorageKey].newValue;
-        currentTokenData = newStorageData;
-        if (newStorageData && newStorageData.data) {
-          displayTokenData(newStorageData);
+        if (newTokenData && newTokenData.data) {
+          displayTokenData(newTokenData); // ✅ Correct format
         } else {
           displayNoTokenData();
         }
       }
-      
+  
       if (changes[walletStorageKey]) {
+        const newWalletData = changes[walletStorageKey].newValue;
         console.log('Detected change in wallet data, reloading...');
-        const newStorageData = changes[walletStorageKey].newValue;
-        currentWalletData = newStorageData;
-        if (newStorageData && newStorageData.data) {
-          displayWalletData(newStorageData);
+        if (newWalletData && newWalletData.data) {
+          displayWalletData(newWalletData);
         } else {
           displayNoWalletData();
         }
       }
     }
   });
+  
 
   // Listen for PnL progress updates from background
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
